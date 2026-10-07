@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merry Made Rank</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a seller's workbench. Top bar with tool tabs, one working panel per tool, data in dense tables and gauges. */
+:root {
+  --paper: #f4f5f0;
+  --card: #ffffff;
+  --ink: #18302f;
+  --muted: #5d6e6b;
+  --line: #d9ded6;
+  --accent: #2f6f5e;
+  --accent-soft: #e2efe9;
+  --mark: #c98a14;
+  --good: #2e7d4f;
+  --warn: #b7791f;
+  --bad: #b3412f;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111a19; --card: #18231f; --ink: #e5ece8; --muted: #9aaba6; --line: #2b3a36;
+    --accent: #6cc3a6; --accent-soft: #1e3a31; --mark: #e8b44a; --good: #6cc38d; --warn: #e3b25a; --bad: #ef8a75;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111a19; --card: #18231f; --ink: #e5ece8; --muted: #9aaba6; --line: #2b3a36;
+  --accent: #6cc3a6; --accent-soft: #1e3a31; --mark: #e8b44a; --good: #6cc38d; --warn: #e3b25a; --bad: #ef8a75;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--body); margin: 0; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 18px 48px; display: grid; gap: 18px; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+header.top h1 { font: 700 1.9rem/1.1 var(--display); margin: 0; letter-spacing: -0.01em; }
+header.top h1 span { color: var(--accent); }
+header.top p { margin: 0; color: var(--muted); }
+nav.tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+nav.tabs button { font: 600 0.92rem var(--body); background: transparent; color: var(--muted); border: 1px solid transparent; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+nav.tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--line); }
+nav.tabs button:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+section.panel { display: grid; gap: 16px; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.box h2 { font: 700 1.15rem/1.2 var(--display); margin: 0; text-wrap: balance; }
+.box h3 { font: 600 0.78rem var(--body); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.row > * { min-width: 0; }
+label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+input, textarea, select { font: 15px var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+textarea { min-height: 72px; resize: vertical; }
+.grow { flex: 1 1 260px; }
+.btn { font: 600 0.92rem var(--body); background: var(--accent); color: var(--card); border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+.btn:disabled { opacity: 0.55; cursor: wait; }
+.note { font-size: 0.86rem; color: var(--muted); margin: 0; max-width: 75ch; }
+.banner { border: 1px dashed var(--mark); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: var(--ink); background: color-mix(in srgb, var(--mark) 10%, var(--card)); }
+.err { color: var(--bad); font-weight: 600; font-size: 0.9rem; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.stat .k { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.stat .v { font: 700 1.45rem/1.15 var(--display); font-variant-numeric: tabular-nums; }
+.stat .s { font-size: 0.8rem; color: var(--muted); }
+.meter { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--accent); }
+.meter i.good { background: var(--good); } .meter i.warn { background: var(--warn); } .meter i.bad { background: var(--bad); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 0.82rem; }
+td a { color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 0.84rem var(--body); border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.chip b { font-family: var(--mono); font-weight: 600; color: var(--accent); font-size: 0.76rem; margin-left: 4px; }
+.chip.have { border-color: var(--good); background: color-mix(in srgb, var(--good) 12%, var(--card)); }
+.chip.miss { border-color: var(--mark); }
+.bars { display: grid; gap: 4px; }
+.bar { display: grid; grid-template-columns: 92px 1fr 34px; gap: 8px; align-items: center; font-size: 0.82rem; }
+.bar .lbl { font-family: var(--mono); font-size: 0.76rem; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.bar .track { height: 12px; background: var(--paper); border-radius: 3px; overflow: hidden; }
+.bar .track i { display: block; height: 100%; background: var(--accent); }
+.bar .ct { font-family: var(--mono); font-size: 0.76rem; font-variant-numeric: tabular-nums; }
+ul.checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+ul.checks li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; font-size: 0.92rem; }
+.pill { font: 600 0.72rem var(--body); border-radius: 999px; padding: 1px 8px; display: inline-block; }
+.pill.good { background: color-mix(in srgb, var(--good) 18%, var(--card)); color: var(--good); }
+.pill.warn { background: color-mix(in srgb, var(--warn) 18%, var(--card)); color: var(--warn); }
+.pill.bad { background: color-mix(in srgb, var(--bad) 18%, var(--card)); color: var(--bad); }
+.ok { color: var(--good); font-weight: 700; } .no { color: var(--bad); font-weight: 700; } .meh { color: var(--warn); font-weight: 700; }
+.out { font-family: var(--mono); font-size: 0.84rem; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px; white-space: pre-wrap; word-break: break-word; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.copyrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; }
+.copyrow .out { min-width: 0; }
+.fees td.n { width: 120px; }
+.fees tr.total td { font-weight: 700; border-bottom: 0; }
+details summary { cursor: pointer; font-weight: 600; }
+ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75ch; }
+@media (prefers-reduced-motion: no-preference) { .meter i, .bar .track i { transition: width .4s ease; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Merry Made <span>Rank</span></h1>
+    <p>Free Etsy keyword and listing workbench. No account, no subscription.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Tools">
+    <button role="tab" id="tab-research" aria-selected="true" data-tab="research">Keyword research</button>
+    <button role="tab" id="tab-ideas" aria-selected="false" data-tab="ideas">Long-tail ideas</button>
+    <button role="tab" id="tab-audit" aria-selected="false" data-tab="audit">Tag optimizer &amp; audit</button>
+    <button role="tab" id="tab-builder" aria-selected="false" data-tab="builder">Title &amp; tag builder</button>
+    <button role="tab" id="tab-fees" aria-selected="false" data-tab="fees">Fee &amp; profit</button>
+    <button role="tab" id="tab-setup" aria-selected="false" data-tab="setup">Setup</button>
+  </nav>
+
+  <!-- KEYWORD RESEARCH -->
+  <section class="panel" data-panel="research">
+    <div class="box">
+      <form class="row" id="kwForm">
+        <label class="grow">Keyword buyers would type
+          <input id="kwInput" value="personalized mug" autocomplete="off">
+        </label>
+        <button class="btn" id="kwGo" type="submit">Analyze</button>
+      </form>
+      <div id="kwBanner" class="banner"></div>
+      <div id="kwErr" class="err" hidden></div>
+    </div>
+
+    <div class="box">
+      <h2 id="kwTitle">Market snapshot</h2>
+      <div class="stats" id="kwStats"></div>
+      <p class="note">Competition is the real count of active Etsy listings for the phrase. Views and favorites come from the top 100 listings Etsy ranks for it. Etsy does not publish search volume to anyone, so the demand and difficulty scores here are estimates built from those numbers.</p>
+    </div>
+
+    <div class="two">
+      <div class="box">
+        <h2>Tags the top listings use</h2>
+        <p class="note">Tap a tag to research it. Green tags are already in your audit tag list.</p>
+        <div class="chips" id="kwTags"></div>
+      </div>
+      <div class="box">
+        <h2>Price spread</h2>
+        <div class="bars" id="kwPrice"></div>
+        <h3>Listing age</h3>
+        <div class="bars" id="kwAge"></div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="row" style="justify-content:space-between">
+        <h2>Top ranking listings</h2>
+        <button class="btn ghost" id="shopsGo" type="button">Load top shops</button>
+      </div>
+      <div class="scroll"><table id="kwTable"></table></div>
+    </div>
+
+    <div class="box" id="shopsBox" hidden>
+      <h2>Top shops in this niche</h2>
+      <div class="scroll"><table id="shopsTable"></table></div>
+    </div>
+  </section>
+
+  <!-- IDEAS -->
+  <section class="panel" data-panel="ideas" hidden>
+    <div class="box">
+      <form class="row" id="ideaForm">
+        <label class="grow">Seed keyword
+          <input id="ideaInput" value="personalized mug" autocomplete="off">
+        </label>
+        <label style="flex:0 1 200px">Source
+          <select id="ideaMode">
+            <option value="deep">Autocomplete a to z</option>
+            <option value="quick">Autocomplete, quick</option>
+            <option value="mods">Modifier mix (offline)</option>
+          </select>
+        </label>
+        <button class="btn" type="submit">Find ideas</button>
+      </form>
+      <div id="ideaBanner" class="banner" hidden></div>
+      <p class="note">Autocomplete phrases are what real shoppers type into Google, so a phrase showing up here has real search demand. Tap any idea to send it to Keyword research.</p>
+    </div>
+    <div class="box">
+      <div class="row" style="justify-content:space-between"><h2 id="ideaCount">Ideas</h2><button class="btn ghost" id="ideaCopy" type="button">Copy list</button></div>
+      <div class="chips" id="ideaList"></div>
+    </div>
+  </section>
+
+  <!-- AUDIT -->
+  <section class="panel" data-panel="audit" hidden>
+    <div class="two">
+      <div class="box">
+        <h2>Your listing</h2>
+        <label>Main keyword<input id="auKw" value="personalized mug"></label>
+        <label>Title (Etsy limit 140 characters)<textarea id="auTitle">Personalized Mug, Custom Name Coffee Mug, Gift for Her, Birthday Gift, Ceramic Mug with Name, Mothers Day Gift for Mom</textarea></label>
+        <label>Tags, one per line or comma separated (13 max, 20 characters each)<textarea id="auTags" style="min-height:150px">personalized mug, custom mug, name mug, gift for her, coffee mug, birthday gift, mug with name, mothers day gift, gift for mom, ceramic mug, custom coffee mug, personalised gift</textarea></label>
+        <label>Description, first lines (optional)<textarea id="auDesc">This personalized mug makes a thoughtful gift. Add any name in our hand-lettered font.</textarea></label>
+      </div>
+      <div class="box">
+        <h2>Score <span id="auScore" class="mono"></span></h2>
+        <div class="meter"><i id="auMeter" style="width:0"></i></div>
+        <ul class="checks" id="auChecks"></ul>
+        <h3>Tags top sellers use that you don't</h3>
+        <div class="chips" id="auMissing"></div>
+        <p class="note" id="auMissNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- BUILDER -->
+  <section class="panel" data-panel="builder" hidden>
+    <div class="box">
+      <h2>Describe the product</h2>
+      <div class="row">
+        <label class="grow">Product (main keyword)<input id="bProduct" value="personalized mug"></label>
+        <label class="grow">Material or type<input id="bMaterial" value="ceramic coffee mug"></label>
+      </div>
+      <div class="row">
+        <label class="grow">Who it's for (comma separated)<input id="bWho" value="mom, her, grandma, coworker"></label>
+        <label class="grow">Occasions (comma separated)<input id="bOcc" value="mothers day, birthday, christmas"></label>
+      </div>
+      <div class="row">
+        <label class="grow">Style or feature words (comma separated)<input id="bStyle" value="custom name, hand lettered, floral"></label>
+        <button class="btn" id="bGo" type="button">Build title &amp; tags</button>
+      </div>
+    </div>
+    <div class="box">
+      <h3>Title options</h3>
+      <div id="bTitles" style="display:grid;gap:8px"></div>
+      <h3>13 tags</h3>
+      <div class="copyrow"><div class="out" id="bTags"></div><button class="btn ghost" id="bTagsCopy" type="button">Copy</button></div>
+      <p class="note">Built from rules Etsy publishes for search: lead the title with the main keyword, keep every tag 20 characters or less, use multi-word phrases, and don't waste tags repeating your category. Send the result to the audit tab to check it.</p>
+      <button class="btn ghost" id="bSend" type="button" style="justify-self:start">Send to audit</button>
+    </div>
+  </section>
+
+  <!-- FEES -->
+  <section class="panel" data-panel="fees" hidden>
+    <div class="two">
+      <div class="box">
+        <h2>Your numbers (USD)</h2>
+        <div class="row">
+          <label class="grow">Item price<input id="fPrice" type="number" step="0.01" value="24"></label>
+          <label class="grow">Shipping charged<input id="fShip" type="number" step="0.01" value="6"></label>
+        </div>
+        <div class="row">
+          <label class="grow">Item cost (materials)<input id="fCost" type="number" step="0.01" value="7.5"></label>
+          <label class="grow">Your real shipping cost<input id="fShipCost" type="number" step="0.01" value="6.5"></label>
+        </div>
+        <div class="row">
+          <label class="grow">Payment processing %<input id="fPpct" type="number" step="0.1" value="3"></label>
+          <label class="grow">Processing fixed fee<input id="fPfix" type="number" step="0.01" value="0.25"></label>
+        </div>
+        <div class="row">
+          <label class="grow">Offsite Ads fee
+            <select id="fOff"><option value="0">Sale not from Offsite Ads</option><option value="15">15% (under $10k/yr sales)</option><option value="12">12% (over $10k/yr sales)</option></select>
+          </label>
+          <label class="grow">Regulatory / currency fee %<input id="fReg" type="number" step="0.1" value="0"></label>
+        </div>
+        <p class="note">Defaults follow Etsy's US fee page: $0.20 listing fee, 6.5% transaction fee on item plus shipping, 3% + $0.25 processing. Processing and currency conversion fees differ by country, so set them to what your Etsy fee page shows.</p>
+      </div>
+      <div class="box">
+        <h2>Profit per sale</h2>
+        <table class="fees" id="fTable"></table>
+        <div class="stats" id="fStats"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETUP -->
+  <section class="panel" data-panel="setup" hidden>
+    <div class="box">
+      <h2>Connect free live data</h2>
+      <p class="note">The listing optimizer, title builder and fee calculator work everywhere with no setup. Live keyword numbers need a free Etsy developer key, and the page must run from a normal website (free GitHub Pages works) because this preview blocks outside connections.</p>
+      <label>Etsy API key (keystring:shared secret)<input id="apiKey" placeholder="abc123xyz:secret456" autocomplete="off"></label>
+      <div class="row"><button class="btn" id="keySave" type="button">Save key in this browser</button><button class="btn ghost" id="keyTest" type="button">Test connection</button></div>
+      <div id="keyMsg" class="note"></div>
+      <details open>
+        <summary>Get a free Etsy key</summary>
+        <ol class="steps">
+          <li>Go to developer.etsy.com, sign in with your Etsy account, and choose Create a New App.</li>
+          <li>Describe it honestly, for example "personal keyword research for my own shop". Pick the personal access option.</li>
+          <li>Once approved, copy the Keystring and Shared Secret and paste them above as keystring:secret.</li>
+          <li>The free tier allows about 10,000 requests a day. One keyword analysis uses 1 request, Load top shops uses up to 20.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>Where this tool lives</summary>
+        <ol class="steps">
+          <li>Merry Made Rank is hosted free on GitHub Pages at abbasforpro.github.io/merry-made-rank.</li>
+          <li>If Etsy asks for your app's website or allowed address, use https://abbasforpro.github.io.</li>
+          <li>Your key is saved only in the browser you paste it into. It is never stored on GitHub, so paste it again on a new phone or computer.</li>
+        </ol>
+      </details>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmt = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n));
+  const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(n).toFixed(2);
+  const median = (a) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const clamp = (n, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
+  const norm = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+  /* ---------- tabs ---------- */
+  const tabs = document.querySelectorAll("nav.tabs button");
+  function showTab(name) {
+    tabs.forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+    document.querySelectorAll("section.panel").forEach((p) => { p.hidden = p.dataset.panel !== name; });
+    store.set("tb.tab", name);
+  }
+  tabs.forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  const startTab = (location.hash || "").slice(1) || store.get("tb.tab");
+  if (startTab && document.querySelector(`[data-panel="${startTab}"]`)) showTab(startTab);
+
+  /* ---------- Etsy API ---------- */
+  const API = "https://openapi.etsy.com/v3/application";
+  const getKey = () => (store.get("tb.key") || "").trim();
+  async function etsy(path) {
+    const key = getKey();
+    if (!key) throw new Error("NOKEY");
+    let res;
+    try { res = await fetch(API + path, { headers: { "x-api-key": key } }); }
+    catch (e) { throw new Error("BLOCKED"); }
+    if (res.status === 401 || res.status === 403) throw new Error("Etsy rejected the key. Check it is keystring:shared secret and the app is approved.");
+    if (res.status === 429) throw new Error("Etsy's free request limit was hit. Wait a minute and try again.");
+    if (!res.ok) throw new Error("Etsy returned error " + res.status + ".");
+    return res.json();
+  }
+
+  /* ---------- example data (shown until live data is connected) ---------- */
+  function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+  function exampleData(kw) {
+    const r = rng(kw.length * 7919 + 17);
+    const pool = ["personalized mug", "custom mug", "name mug", "coffee mug", "gift for her", "gift for mom", "mothers day gift", "birthday gift", "custom coffee mug", "mug with name", "personalised gift", "ceramic mug", "funny mug", "teacher gift", "bridesmaid gift", "christmas gift", "photo mug", "best friend gift", "grandma gift", "custom text mug", "coworker gift", "monogram mug", "floral mug", "dog mom mug"];
+    const results = [];
+    const now = Date.now() / 1000;
+    for (let i = 0; i < 100; i++) {
+      const tags = [...pool].sort(() => r() - 0.5).slice(0, 10 + Math.floor(r() * 4));
+      const views = Math.round(Math.pow(10, 1.6 + r() * 2.6) * (i < 10 ? 3 : 1));
+      results.push({
+        listing_id: 1000 + i, shop_id: 50 + Math.floor(r() * 40),
+        title: "Example listing " + (i + 1) + " · " + tags.slice(0, 3).join(", "),
+        tags, views, num_favorers: Math.round(views * (0.03 + r() * 0.09)),
+        price: { amount: Math.round((9 + r() * 30) * 100), divisor: 100, currency_code: "USD" },
+        original_creation_timestamp: now - r() * 86400 * 365 * 5, url: ""
+      });
+    }
+    return { count: 184232, results, example: true };
+  }
+
+  /* ---------- keyword research ---------- */
+  let lastData = null, lastKw = "";
+  async function research(kw) {
+    kw = norm(kw); if (!kw) return;
+    lastKw = kw; $("kwInput").value = kw;
+    $("kwErr").hidden = true; $("kwGo").disabled = true; $("kwGo").textContent = "Analyzing…";
+    let data;
+    try {
+      data = await etsy("/listings/active?limit=100&sort_on=score&keywords=" + encodeURIComponent(kw));
+      $("kwBanner").hidden = true;
+    } catch (e) {
+      data = exampleData(kw);
+      $("kwBanner").hidden = false;
+      $("kwBanner").textContent = e.message === "NOKEY"
+        ? "Showing example numbers. Add your free Etsy API key in Setup to see real data for any keyword."
+        : e.message === "BLOCKED"
+          ? "Showing example numbers. This page can't reach Etsy from here; run it from your own free GitHub Pages site (see Setup)."
+          : "Showing example numbers. " + e.message;
+    }
+    $("kwGo").disabled = false; $("kwGo").textContent = "Analyze";
+    lastData = data; render(kw, data);
+  }
+
+  function scores(data) {
+    const L = data.results || [];
+    const views = L.map((l) => l.views || 0), favs = L.map((l) => l.num_favorers || 0);
+    const top10 = L.slice(0, 10);
+    const avgViewsTop = top10.reduce((a, l) => a + (l.views || 0), 0) / Math.max(1, top10.length);
+    const medViews = median(views), medFavs = median(favs);
+    const favRate = views.reduce((a, b) => a + b, 0) ? favs.reduce((a, b) => a + b, 0) / views.reduce((a, b) => a + b, 0) : 0;
+    const demand = clamp(Math.log10(medViews + 1) / Math.log10(3000) * 100);
+    const comp = clamp(Math.log10((data.count || 0) + 1) / Math.log10(1000000) * 100);
+    const strength = clamp(Math.log10(median(favs.slice(0, 20)) + 1) / Math.log10(1500) * 100);
+    const difficulty = Math.round(0.6 * comp + 0.4 * strength);
+    const opportunity = Math.round(clamp(demand * 0.7 + (100 - difficulty) * 0.3));
+    return { medViews, medFavs, avgViewsTop, favRate, demand: Math.round(demand), difficulty, opportunity };
+  }
+  const tone = (v, invert) => { const x = invert ? 100 - v : v; return x >= 60 ? "good" : x >= 35 ? "warn" : "bad"; };
+  const word = (v, invert) => ({ good: invert ? "Easy" : "Strong", warn: "Medium", bad: invert ? "Hard" : "Weak" }[tone(v, invert)]);
+
+  function render(kw, data) {
+    const s = scores(data), L = data.results || [];
+    $("kwTitle").textContent = "Market snapshot for “" + kw + "”" + (data.example ? " (example)" : "");
+    const stat = (k, v, sub, pct, t) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span>${pct != null ? `<div class="meter"><i class="${t}" style="width:${pct}%"></i></div>` : ""}<span class="s">${sub}</span></div>`;
+    $("kwStats").innerHTML =
+      stat("Competing listings", fmt(data.count || 0), "active listings on Etsy") +
+      stat("Demand score", s.demand + "/100", word(s.demand) + " · median " + fmt(s.medViews) + " views", s.demand, tone(s.demand)) +
+      stat("Keyword difficulty", s.difficulty + "/100", word(s.difficulty, true) + " to rank", s.difficulty, tone(s.difficulty, true)) +
+      stat("Opportunity", s.opportunity + "/100", "demand weighed against difficulty", s.opportunity, tone(s.opportunity)) +
+      stat("Top 10 avg views", fmt(s.avgViewsTop), "lifetime views per listing") +
+      stat("Favorite rate", (s.favRate * 100).toFixed(1) + "%", "favorites per view, top 100");
+
+    const freq = {};
+    L.forEach((l) => (l.tags || []).forEach((t) => { t = norm(t); freq[t] = (freq[t] || 0) + 1; }));
+    const top = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 40);
+    window.__topTags = top;
+    const mine = new Set(parseTags($("auTags").value));
+    $("kwTags").innerHTML = top.map(([t, c]) => `<button type="button" class="chip${mine.has(t) ? " have" : ""}" data-kw="${esc(t)}">${esc(t)}<b>${c}</b></button>`).join("") || '<p class="note">No tag data.</p>';
+
+    const prices = L.map((l) => l.price ? l.price.amount / l.price.divisor : 0).filter((p) => p > 0);
+    const cur = (L[0] && L[0].price && L[0].price.currency_code) || "USD";
+    $("kwPrice").innerHTML = prices.length ? histogram(prices, 6, (a, b) => a.toFixed(0) + "–" + b.toFixed(0)) +
+      `<p class="note">Median ${median(prices).toFixed(2)} ${esc(cur)} · range ${Math.min(...prices).toFixed(2)} to ${Math.max(...prices).toFixed(2)}</p>` : "";
+    const now = Date.now() / 1000;
+    const ages = L.map((l) => (now - (l.original_creation_timestamp || l.creation_timestamp || now)) / 86400 / 365);
+    const buckets = [["< 6 mo", 0, 0.5], ["6–12 mo", 0.5, 1], ["1–2 yr", 1, 2], ["2–4 yr", 2, 4], ["4+ yr", 4, 99]];
+    const counts = buckets.map(([, a, b]) => ages.filter((x) => x >= a && x < b).length);
+    const mx = Math.max(1, ...counts);
+    $("kwAge").innerHTML = buckets.map(([n], i) => barRow(n, counts[i], mx)).join("") +
+      `<p class="note">${counts[0] + counts[1]} of the top ${L.length} listings are under a year old${counts[0] + counts[1] >= 20 ? ", so new listings can still rank here." : ". Older listings dominate, so expect a slower climb."}</p>`;
+
+    $("kwTable").innerHTML = "<thead><tr><th>#</th><th>Listing</th><th class='n'>Price</th><th class='n'>Views</th><th class='n'>Favs</th><th class='n'>Fav %</th></tr></thead><tbody>" +
+      L.slice(0, 25).map((l, i) => {
+        const p = l.price ? (l.price.amount / l.price.divisor).toFixed(2) : "";
+        const name = esc((l.title || "").slice(0, 90));
+        const link = l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">${name}</a>` : name;
+        const fr = l.views ? ((l.num_favorers || 0) / l.views * 100).toFixed(1) : "0";
+        return `<tr><td class="n">${i + 1}</td><td>${link}</td><td class="n">${p}</td><td class="n">${fmt(l.views || 0)}</td><td class="n">${fmt(l.num_favorers || 0)}</td><td class="n">${fr}</td></tr>`;
+      }).join("") + "</tbody>";
+    $("shopsBox").hidden = true;
+    renderAudit();
+  }
+  function barRow(label, c, mx) { return `<div class="bar"><span class="lbl">${esc(label)}</span><span class="track"><i style="width:${c / mx * 100}%"></i></span><span class="ct">${c}</span></div>`; }
+  function histogram(vals, n, lab) {
+    const s = [...vals].sort((a, b) => a - b);
+    const lo = s[0], hi = s[Math.floor(s.length * 0.95)] || s[s.length - 1];
+    const w = (hi - lo) / n || 1;
+    const c = new Array(n).fill(0);
+    vals.forEach((v) => { c[Math.min(n - 1, Math.max(0, Math.floor((v - lo) / w)))]++; });
+    const mx = Math.max(...c);
+    return c.map((x, i) => barRow(lab(lo + i * w, i === n - 1 ? s[s.length - 1] : lo + (i + 1) * w), x, mx)).join("");
+  }
+
+  $("kwForm").addEventListener("submit", (e) => { e.preventDefault(); research($("kwInput").value); });
+  $("kwTags").addEventListener("click", (e) => { const b = e.target.closest("[data-kw]"); if (b) { research(b.dataset.kw); window.scrollTo({ top: 0 }); } });
+
+  $("shopsGo").addEventListener("click", async () => {
+    if (!lastData) return;
+    const btn = $("shopsGo"); btn.disabled = true; btn.textContent = "Loading…";
+    const byShop = {};
+    (lastData.results || []).forEach((l) => { byShop[l.shop_id] = (byShop[l.shop_id] || 0) + 1; });
+    const ids = Object.entries(byShop).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([id]) => id);
+    let rows = [];
+    if (lastData.example) {
+      const r = rng(99);
+      rows = ids.map((id, i) => ({ shop_name: "ExampleShop" + (i + 1), transaction_sold_count: Math.round(Math.pow(10, 2 + r() * 3)), review_count: Math.round(r() * 3000), review_average: 4.5 + r() * 0.5, create_date: Date.now() / 1000 - r() * 86400 * 365 * 8, url: "", hits: byShop[id] }));
+    } else {
+      for (let i = 0; i < ids.length; i += 5) {
+        const part = await Promise.all(ids.slice(i, i + 5).map((id) => etsy("/shops/" + id).then((s) => ({ ...s, hits: byShop[id] })).catch(() => null)));
+        rows.push(...part.filter(Boolean));
+      }
+    }
+    rows.sort((a, b) => (b.transaction_sold_count || 0) - (a.transaction_sold_count || 0));
+    $("shopsTable").innerHTML = "<thead><tr><th>Shop</th><th class='n'>Lifetime sales</th><th class='n'>Reviews</th><th class='n'>Rating</th><th class='n'>Opened</th><th class='n'>Listings in top 100</th></tr></thead><tbody>" +
+      rows.map((s) => {
+        const nm = s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.shop_name)}</a>` : esc(s.shop_name);
+        return `<tr><td>${nm}</td><td class="n">${fmt(s.transaction_sold_count || 0)}</td><td class="n">${fmt(s.review_count || 0)}</td><td class="n">${s.review_average ? Number(s.review_average).toFixed(2) : "–"}</td><td class="n">${s.create_date ? new Date(s.create_date * 1000).getFullYear() : "–"}</td><td class="n">${s.hits}</td></tr>`;
+      }).join("") + "</tbody>";
+    $("shopsBox").hidden = false; btn.disabled = false; btn.textContent = "Load top shops";
+  });
+
+  /* ---------- long-tail ideas ---------- */
+  function suggest(q) {
+    return new Promise((resolve) => {
+      const cb = "tbcb" + Math.random().toString(36).slice(2);
+      const s = document.createElement("script");
+      const done = (v) => { clearTimeout(t); delete window[cb]; s.remove(); resolve(v); };
+      const t = setTimeout(() => done(null), 4000);
+      window[cb] = (d) => done(Array.isArray(d) && Array.isArray(d[1]) ? d[1].map((x) => Array.isArray(x) ? x[0] : x) : []);
+      s.onerror = () => done(null);
+      s.src = "https://suggestqueries.google.com/complete/search?client=youtube&ds=sh&hl=en&q=" + encodeURIComponent(q) + "&callback=" + cb;
+      document.head.appendChild(s);
+    });
+  }
+  const MODS = {
+    who: ["for mom", "for her", "for him", "for dad", "for grandma", "for teacher", "for best friend", "for coworker", "for kids", "for wife", "for boyfriend"],
+    occ: ["birthday", "christmas", "mothers day", "fathers day", "wedding", "anniversary", "graduation", "retirement", "valentines"],
+    style: ["custom", "personalized", "handmade", "funny", "minimalist", "vintage", "boho", "cute", "unique"]
+  };
+  function modifierIdeas(seed) {
+    const out = new Set();
+    MODS.style.forEach((m) => { if (!seed.includes(m)) out.add(m + " " + seed); });
+    MODS.who.forEach((m) => out.add(seed + " " + m));
+    MODS.occ.forEach((m) => { out.add(m + " " + seed); out.add(seed + " " + m + " gift"); });
+    return [...out];
+  }
+  let ideas = [];
+  $("ideaForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const seed = norm($("ideaInput").value); if (!seed) return;
+    const mode = $("ideaMode").value;
+    $("ideaBanner").hidden = true;
+    $("ideaList").innerHTML = '<p class="note">Collecting…</p>';
+    if (mode === "mods") { ideas = modifierIdeas(seed); return paintIdeas("from modifiers"); }
+    const queries = mode === "quick" ? [seed, seed + " ", "etsy " + seed]
+      : [seed, "etsy " + seed, ...("abcdefghijklmnopqrstuvwxyz".split("").map((c) => seed + " " + c)), ...["for", "gift"].map((w) => seed + " " + w)];
+    const set = new Set(); let failed = 0;
+    for (let i = 0; i < queries.length; i += 4) {
+      const res = await Promise.all(queries.slice(i, i + 4).map(suggest));
+      res.forEach((r) => { if (r === null) failed++; else r.forEach((x) => set.add(norm(String(x).replace(/^etsy\s+/, "")))); });
+      if (failed >= 4 && set.size === 0) break;
+    }
+    set.delete(seed);
+    if (set.size === 0) {
+      ideas = modifierIdeas(seed);
+      $("ideaBanner").hidden = false;
+      $("ideaBanner").textContent = "Autocomplete can't be reached from this preview, so these ideas come from the offline modifier mix. Run the page from your own GitHub Pages site to get live autocomplete.";
+      return paintIdeas("from modifiers");
+    }
+    ideas = [...set]; paintIdeas("from autocomplete");
+  });
+  function paintIdeas(src) {
+    $("ideaCount").textContent = ideas.length + " ideas " + src;
+    $("ideaList").innerHTML = ideas.map((t) => `<button type="button" class="chip" data-kw="${esc(t)}">${esc(t)}${t.length <= 20 ? "" : '<b>long</b>'}</button>`).join("");
+  }
+  $("ideaList").addEventListener("click", (e) => { const b = e.target.closest("[data-kw]"); if (b) { showTab("research"); research(b.dataset.kw); } });
+  $("ideaCopy").addEventListener("click", () => copy(ideas.join("\n"), $("ideaCopy")));
+
+  /* ---------- audit ---------- */
+  function parseTags(s) { return s.split(/[\n,]+/).map(norm).filter(Boolean); }
+  function renderAudit() {
+    const kw = norm($("auKw").value), title = $("auTitle").value.trim(), tags = parseTags($("auTags").value), desc = norm($("auDesc").value);
+    const checks = [];
+    const add = (state, text, pts) => checks.push({ state, text, pts });
+    const tl = title.length;
+    add(tl > 0 && tl <= 140 ? (tl >= 60 ? "ok" : "meh") : "no", `Title is ${tl} of 140 characters${tl < 60 ? ". Use more of the space for extra keywords." : tl > 140 ? ". Etsy will cut it off." : "."}`, tl && tl <= 140 ? (tl >= 60 ? 15 : 8) : 0);
+    const first = norm(title).slice(0, 40);
+    add(kw && first.includes(kw) ? "ok" : "no", kw ? `Main keyword ${first.includes(kw) ? "appears" : "does not appear"} in the first 40 characters of the title.` : "Add a main keyword to check placement.", kw && first.includes(kw) ? 20 : 0);
+    add(tags.length === 13 ? "ok" : tags.length >= 10 ? "meh" : "no", `${tags.length} of 13 tags used${tags.length < 13 ? ". Every empty tag is a missed search." : "."}`, Math.round(tags.length / 13 * 20));
+    const long = tags.filter((t) => t.length > 20);
+    add(long.length ? "no" : "ok", long.length ? `${long.length} tag(s) over 20 characters: ${long.join(", ")}` : "All tags fit Etsy's 20 character limit.", long.length ? 0 : 10);
+    const dup = tags.filter((t, i) => tags.indexOf(t) !== i);
+    add(dup.length ? "no" : "ok", dup.length ? "Duplicate tags: " + [...new Set(dup)].join(", ") : "No duplicate tags.", dup.length ? 0 : 5);
+    const single = tags.filter((t) => !t.includes(" "));
+    add(single.length > 2 ? "meh" : "ok", single.length ? `${single.length} single-word tag(s). Multi-word phrases match more real searches.` : "Every tag is a multi-word phrase.", single.length > 2 ? 3 : 10);
+    add(kw && tags.includes(kw) ? "ok" : "meh", kw && tags.includes(kw) ? "Main keyword is one of your tags." : "Add the exact main keyword as a tag.", kw && tags.includes(kw) ? 10 : 0);
+    add(kw && desc.slice(0, 160).includes(kw) ? "ok" : "meh", kw && desc.includes(kw) ? "Description mentions the main keyword early." : "Mention the main keyword in the first sentence of the description.", kw && desc.slice(0, 160).includes(kw) ? 10 : 0);
+    const score = checks.reduce((a, c) => a + c.pts, 0);
+    $("auScore").textContent = score + "/100";
+    const m = $("auMeter"); m.style.width = score + "%"; m.className = score >= 75 ? "good" : score >= 50 ? "warn" : "bad";
+    const icon = { ok: '<span class="ok">✓</span>', meh: '<span class="meh">!</span>', no: '<span class="no">✕</span>' };
+    $("auChecks").innerHTML = checks.map((c) => `<li>${icon[c.state]}<span>${esc(c.text)}</span></li>`).join("");
+    const top = window.__topTags || [];
+    const have = new Set(tags);
+    const miss = top.filter(([t]) => !have.has(t) && t.length <= 20).slice(0, 15);
+    $("auMissing").innerHTML = miss.map(([t, c]) => `<button type="button" class="chip miss" data-add="${esc(t)}">+ ${esc(t)}<b>${c}</b></button>`).join("");
+    $("auMissNote").textContent = top.length ? `Compared with the top 100 listings for “${lastKw}”${lastData && lastData.example ? " (example data)" : ""}. Tap a tag to add it.` : "Run a keyword in Keyword research to compare against top sellers.";
+  }
+  ["auKw", "auTitle", "auTags", "auDesc"].forEach((id) => $(id).addEventListener("input", renderAudit));
+  $("auMissing").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-add]"); if (!b) return;
+    const tags = parseTags($("auTags").value);
+    if (tags.length >= 13) tags.pop();
+    tags.push(b.dataset.add); $("auTags").value = tags.join(", "); renderAudit();
+  });
+
+  /* ---------- builder ---------- */
+  const list = (id) => $(id).value.split(",").map(norm).filter(Boolean);
+  const cap = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+  let built = { titles: [], tags: [] };
+  function build() {
+    const p = norm($("bProduct").value), mat = norm($("bMaterial").value), who = list("bWho"), occ = list("bOcc"), sty = list("bStyle");
+    const fit = (parts) => { let t = ""; for (const x of parts) { const n = t ? t + ", " + x : x; if (n.length > 140) break; t = n; } return t; };
+    const titles = [
+      fit([cap(p), ...sty.slice(0, 1).map((s) => cap(s + " " + mat)), ...who.slice(0, 2).map((w) => "Gift for " + cap(w)), ...occ.map((o) => cap(o) + " Gift")]),
+      fit([cap(p) + (who[0] ? " for " + cap(who[0]) : ""), cap(mat), ...occ.slice(0, 2).map((o) => cap(o) + " Gift"), ...sty.map(cap), ...who.slice(1).map((w) => "Gift for " + cap(w))]),
+      fit([cap(p), ...sty.slice(0, 2).map(cap), cap(mat), ...occ.map((o) => cap(o) + " Gift for " + cap(who[0] || "Her"))])
+    ];
+    const cand = [p, mat, ...sty.map((s) => s.includes(p.split(" ").pop()) ? s : s + " " + p.split(" ").pop()), ...who.map((w) => "gift for " + w), ...occ.map((o) => o + " gift"), ...sty, ...occ.map((o) => o + " " + p.split(" ").pop()), ...who.map((w) => p.split(" ").pop() + " for " + w)];
+    const tags = [];
+    cand.forEach((t) => { t = norm(t); if (t && t.length <= 20 && !tags.includes(t) && tags.length < 13) tags.push(t); });
+    built = { titles: [...new Set(titles)], tags };
+    $("bTitles").innerHTML = built.titles.map((t, i) => `<div class="copyrow"><div class="out">${esc(t)} <span class="pill ${t.length <= 140 ? "good" : "bad"}">${t.length}/140</span></div><button class="btn ghost" type="button" data-copy="${i}">Copy</button></div>`).join("");
+    $("bTags").textContent = tags.join(", ") + `\n\n${tags.length}/13 tags` + (tags.length < 13 ? ". Add more style, recipient or occasion words to fill the rest." : "");
+  }
+  $("bGo").addEventListener("click", build);
+  $("bTitles").addEventListener("click", (e) => { const b = e.target.closest("[data-copy]"); if (b) copy(built.titles[+b.dataset.copy], b); });
+  $("bTagsCopy").addEventListener("click", () => copy(built.tags.join(", "), $("bTagsCopy")));
+  $("bSend").addEventListener("click", () => {
+    $("auKw").value = norm($("bProduct").value); $("auTitle").value = built.titles[0] || ""; $("auTags").value = built.tags.join(", ");
+    showTab("audit"); renderAudit();
+  });
+
+  /* ---------- fees ---------- */
+  function fees() {
+    const v = (id) => parseFloat($(id).value) || 0;
+    const price = v("fPrice"), ship = v("fShip"), gross = price + ship;
+    const rows = [
+      ["Listing fee", 0.20],
+      ["Transaction fee (6.5% of item + shipping)", gross * 0.065],
+      [`Payment processing (${v("fPpct")}% + ${money(v("fPfix"))})`, gross * v("fPpct") / 100 + v("fPfix")],
+      ["Offsite Ads", Math.min(price * v("fOff") / 100, v("fOff") ? 100 : 0)],
+      ["Regulatory / currency", gross * v("fReg") / 100]
+    ];
+    const totalFees = rows.reduce((a, r) => a + r[1], 0);
+    const profit = gross - totalFees - v("fCost") - v("fShipCost");
+    $("fTable").innerHTML = `<tr><td>Buyer pays</td><td class="n">${money(gross)}</td></tr>` +
+      rows.map(([n, x]) => `<tr><td>${esc(n)}</td><td class="n">-${money(x).replace("$", "$")}</td></tr>`).join("") +
+      `<tr><td>Materials</td><td class="n">-${money(v("fCost"))}</td></tr><tr><td>Your shipping cost</td><td class="n">-${money(v("fShipCost"))}</td></tr>` +
+      `<tr class="total"><td>Profit</td><td class="n">${money(profit)}</td></tr>`;
+    const margin = gross ? profit / gross * 100 : 0;
+    const t = margin >= 30 ? "good" : margin >= 15 ? "warn" : "bad";
+    const be = (v("fCost") + v("fShipCost") + 0.20 + v("fPfix") - ship * (1 - 0.065 - v("fPpct") / 100 - v("fReg") / 100)) / (1 - 0.065 - v("fPpct") / 100 - v("fReg") / 100 - v("fOff") / 100);
+    $("fStats").innerHTML = `<div class="stat"><span class="k">Total Etsy fees</span><span class="v">${money(totalFees)}</span><span class="s">${gross ? (totalFees / gross * 100).toFixed(1) : 0}% of what the buyer pays</span></div>` +
+      `<div class="stat"><span class="k">Margin</span><span class="v">${margin.toFixed(1)}%</span><span class="s"><span class="pill ${t}">${{ good: "Healthy", warn: "Thin", bad: "Losing money" }[t]}</span></span></div>` +
+      `<div class="stat"><span class="k">Break-even price</span><span class="v">${money(Math.max(0, be))}</span><span class="s">lowest item price with no loss</span></div>`;
+  }
+  document.querySelectorAll('[data-panel="fees"] input, [data-panel="fees"] select').forEach((el) => el.addEventListener("input", fees));
+
+  /* ---------- setup ---------- */
+  $("apiKey").value = getKey();
+  $("keySave").addEventListener("click", () => { store.set("tb.key", $("apiKey").value.trim()); $("keyMsg").textContent = "Saved in this browser only. It is never sent anywhere except Etsy."; });
+  $("keyTest").addEventListener("click", async () => {
+    store.set("tb.key", $("apiKey").value.trim());
+    $("keyMsg").textContent = "Testing…";
+    try { const d = await etsy("/listings/active?limit=1&keywords=mug"); $("keyMsg").textContent = "Connected. Etsy reports " + fmt(d.count) + " active listings for “mug”."; }
+    catch (e) { $("keyMsg").textContent = e.message === "NOKEY" ? "Paste your key first." : e.message === "BLOCKED" ? "This page can't reach Etsy from here. Host it on GitHub Pages (steps below) and test again." : e.message; }
+  });
+
+  /* ---------- copy helper ---------- */
+  function copy(text, btn) {
+    const done = () => { const o = btn.textContent; btn.textContent = "Copied"; setTimeout(() => (btn.textContent = o), 1200); };
+    try { navigator.clipboard.writeText(text).then(done, () => fallback()); } catch (e) { fallback(); }
+    function fallback() { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } catch (e) {} ta.remove(); }
+  }
+
+  build(); fees(); research($("kwInput").value);
+})();
+</script>
+</body>
+</html>
