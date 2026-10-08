@@ -72,6 +72,9 @@ a.btn { text-decoration: none; display: inline-block; }
 .gcountry .top { display: flex; justify-content: space-between; gap: 8px; font-size: 0.92rem; }
 .gcountry .top b { font-family: var(--mono); font-size: 0.85rem; }
 .gcountry .code { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin-right: 6px; }
+.glist { margin: 0; padding-left: 28px; display: grid; gap: 8px; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+.glist li { padding-left: 4px; overflow-wrap: anywhere; }
+.glist a { color: var(--accent); }
 .ggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
 .gcard { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; background: var(--paper); min-width: 0; }
 .gcard .ph { aspect-ratio: 4 / 3; max-width: 100%; background: var(--line); display: grid; place-items: center; color: var(--muted); font-size: 0.8rem; position: relative; }
@@ -186,7 +189,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
 
     <div class="box">
       <h2 id="gTopTitle">Top 10 listings</h2>
-      <div class="ggrid" id="gTop"></div>
+      <ol class="glist" id="gTop"></ol>
     </div>
   </section>
 
@@ -736,21 +739,10 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       st("KD", s.difficulty + "/100", word(s.difficulty, true) + " to rank", `<div class="meter"><i class="${tone(s.difficulty, true)}" style="width:${s.difficulty}%"></i></div>`);
     $("gTopTitle").textContent = "Top 10 listings" + (example ? " (example)" : "");
     const top = L.slice(0, 10);
-    const card = (l, i, img) => {
-      const p = usdOf(l);
-      const t = esc(l.title || "");
-      const link = l.url ? `<a class="t" href="${esc(l.url)}" target="_blank" rel="noopener">${t}</a>` : `<span class="t">${t}</span>`;
-      return `<div class="gcard"><div class="ph">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : "No photo"}<span class="rank">#${i + 1}</span></div>
-        <div class="body">${link}<div class="m"><span><b>${p != null ? "$" + p.toFixed(2) : "–"}</b></span><span><b>${fmt(l.views || 0)}</b> views</span><span><b>${fmt(l.num_favorers || 0)}</b> favs</span></div></div></div>`;
-    };
-    $("gTop").innerHTML = top.map((l, i) => card(l, i, null)).join("");
-    if (!example && top.length) {
-      etsy("/listings/batch?includes=Images&listing_ids=" + top.map((l) => l.listing_id).join(",")).then((b) => {
-        if (run !== gRun) return;
-        const imgs = {}; (b.results || []).forEach((r) => { const im = (r.images || [])[0]; if (im) imgs[r.listing_id] = im.url_570xN || im.url_fullxfull; });
-        $("gTop").innerHTML = top.map((l, i) => card(l, i, imgs[l.listing_id])).join("");
-      }).catch(() => {});
-    }
+    $("gTop").innerHTML = top.map((l, i) => {
+      const t = esc(l.title || "Untitled listing");
+      return `<li>${l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">${t}</a>` : t}</li>`;
+    }).join("");
     const g = await googleData(kw, example);
     if (run !== gRun) return;
     drawTrend(g); drawCountries(g);
