@@ -683,9 +683,12 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       return j;
     } catch (e) { return { error: "Couldn't reach the connector." }; }
   }
+  // Free fallback until Google Ads data is available: open the keyword in Google Trends.
+  const trendsLink = (what, date) => { const kw = $("gInput").value;
+    return `<a href="https://trends.google.com/trends/explore?q=${encodeURIComponent(kw)}&date=${encodeURIComponent(date)}" target="_blank" rel="noopener">See ${what} for “${esc(kw)}” on Google Trends ↗</a>`; };
   function drawTrend(g) {
     const el = $("gTrend");
-    if (g.error) { el.innerHTML = `<div class="gempty">${esc(g.error)}</div>`; $("gVol").textContent = ""; return; }
+    if (g.error) { el.innerHTML = `<div class="gempty">${trendsLink("12-month trend", "today 12-m")}</div>`; $("gVol").textContent = ""; return; }
     const M = g.months || [];
     if (!M.length) { el.innerHTML = '<div class="gempty">Google has no search data for this keyword.</div>'; return; }
     $("gVol").textContent = fmt(g.volume) + " searches / month" + (g.example ? " (example)" : "");
@@ -706,7 +709,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
   }
   function drawCountries(g) {
     const el = $("gCountries");
-    if (g.error) { el.innerHTML = `<div class="gempty">${esc(g.error)}</div>`; return; }
+    if (g.error) { el.innerHTML = `<div class="gempty">${trendsLink("top countries", "today 12-m")}</div>`; return; }
     const C = (g.countries || []).filter((c) => c.v > 0);
     if (!C.length) { el.innerHTML = '<div class="gempty">Not enough Google searches to rank countries.</div>'; return; }
     const total = C.reduce((a, c) => a + c.v, 0), mx = C[0].v;
