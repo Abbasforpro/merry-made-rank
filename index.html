@@ -346,7 +346,13 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
   /* ---------- Etsy API ---------- */
   const API = "https://openapi.etsy.com/v3/application";
   const getKey = () => (store.get("tb.key") || "").replace(/\s+/g, "");
-  const getProxy = () => (store.get("tb.proxy") || "").trim().replace(/\/+$/, "");
+  function cleanProxy(v) {
+    v = (v || "").trim();
+    if (!v) return "";
+    if (!/^https?:\/\//i.test(v)) v = "https://" + v;
+    try { return new URL(v).origin; } catch (e) { return v.replace(/\/+$/, ""); }
+  }
+  const getProxy = () => cleanProxy(store.get("tb.proxy"));
   async function etsy(path) {
     const key = getKey(), proxy = getProxy();
     if (!key && !proxy) throw new Error("NOKEY");
@@ -357,7 +363,11 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     catch (e) { throw new Error(proxy ? "PROXYFAIL" : "BLOCKED"); }
     if (res.status === 401 || res.status === 403) throw new Error("Etsy rejected the key. Check it is keystring:shared secret and the app is approved.");
     if (res.status === 429) throw new Error("Etsy's free request limit was hit. Wait a minute and try again.");
-    if (!res.ok) throw new Error("Etsy returned error " + res.status + ".");
+    if (!res.ok) {
+      let detail = "";
+      try { detail = (await res.text()).slice(0, 160); } catch (e) {}
+      throw new Error((proxy ? "The connector" : "Etsy") + " returned error " + res.status + (detail ? ": " + detail : "."));
+    }
     return res.json();
   }
 
@@ -654,7 +664,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
   /* ---------- setup ---------- */
   $("apiKey").value = getKey();
   $("proxyUrl").value = getProxy();
-  const saveSetup = () => { store.set("tb.key", $("apiKey").value.replace(/\s+/g, "")); store.set("tb.proxy", $("proxyUrl").value.trim()); };
+  const saveSetup = () => { store.set("tb.key", $("apiKey").value.replace(/\s+/g, "")); store.set("tb.proxy", cleanProxy($("proxyUrl").value)); $("proxyUrl").value = getProxy(); };
   $("keySave").addEventListener("click", () => { saveSetup(); $("keyMsg").textContent = "Saved in this browser only."; });
   $("keyTest").addEventListener("click", async () => {
     saveSetup();
