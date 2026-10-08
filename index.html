@@ -37,6 +37,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--body); margin: 0; }
 .wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 18px 48px; display: grid; gap: 18px; }
 header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
@@ -151,7 +152,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       <div class="box">
         <h2>Searchers by country</h2>
         <div class="trends" id="trGeo"></div>
-        <p class="note" id="trNote">From Google Trends: where people search this phrase on Google, past 12 months. 100 is the country with the most interest for its size.</p>
+        <p class="note" id="trNote">From Google Trends: where people search this phrase on Google, past 12 months. 100 is the country with the most interest for its size. If the box stays grey, Google blocked the chart in this browser; use Open in Google Trends.</p>
       </div>
       <div class="box">
         <h2>Search trend, 12 months</h2>
