@@ -60,7 +60,8 @@ textarea { min-height: 72px; resize: vertical; }
 .btn { font: 600 0.92rem var(--body); background: var(--accent); color: var(--card); border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; white-space: nowrap; }
 .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
 a.btn { text-decoration: none; display: inline-block; }
-.row.buyers { align-items: center; }
+.trends { min-height: 120px; min-width: 0; overflow: hidden; }
+.trends iframe { width: 100% !important; }
 .btn:disabled { opacity: 0.55; cursor: wait; }
 .note { font-size: 0.86rem; color: var(--muted); margin: 0; max-width: 75ch; }
 .banner { border: 1px dashed var(--mark); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: var(--ink); background: color-mix(in srgb, var(--mark) 10%, var(--card)); }
@@ -143,12 +144,24 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       <h2 id="kwTitle">Market snapshot</h2>
       <div class="stats" id="kwStats"></div>
       <p class="note">Competition is the real count of active Etsy listings for the phrase. Views and favorites come from the top 100 listings Etsy ranks for it. Etsy does not publish search volume to anyone, so the demand and difficulty scores here are estimates built from those numbers.</p>
-      <div class="row buyers">
-        <span class="note"><strong>Where are buyers searching?</strong> Check this keyword by country:</span>
-        <a class="btn ghost" id="kwTrends" href="https://trends.google.com/trends/explore?date=today%2012-m" target="_blank" rel="noopener">Google Trends by country ↗</a>
-        <a class="btn ghost" id="kwPlanner" href="https://ads.google.com/aw/keywordplanner/home" target="_blank" rel="noopener">Keyword Planner ↗</a>
+
+    </div>
+
+    <div class="two">
+      <div class="box">
+        <h2>Searchers by country</h2>
+        <div class="trends" id="trGeo"></div>
+        <p class="note" id="trNote">From Google Trends: where people search this phrase on Google, past 12 months. 100 is the country with the most interest for its size.</p>
       </div>
-      <p class="note" id="kwTrendsNote">Google Trends opens with this keyword filled in. Scroll down to "Interest by region" to see the top countries. In Keyword Planner, choose "Get search volume", paste the keyword (copied for you when you click), and set Locations to see volume per country.</p>
+      <div class="box">
+        <h2>Search trend, 12 months</h2>
+        <div class="trends" id="trTime"></div>
+        <div class="row">
+          <a class="btn ghost" id="kwTrends" href="https://trends.google.com/trends/explore?date=today%2012-m" target="_blank" rel="noopener">Open in Google Trends ↗</a>
+          <a class="btn ghost" id="kwPlanner" href="https://ads.google.com/aw/keywordplanner/home" target="_blank" rel="noopener">Keyword Planner ↗</a>
+        </div>
+        <p class="note">Keyword Planner gives monthly search counts per country. Choose "Get search volume", paste the keyword (copied when you click), and set Locations.</p>
+      </div>
     </div>
 
     <div class="two">
@@ -456,7 +469,32 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
   const tone = (v, invert) => { const x = invert ? 100 - v : v; return x >= 60 ? "good" : x >= 35 ? "warn" : "bad"; };
   const word = (v, invert) => ({ good: invert ? "Easy" : "Strong", warn: "Medium", bad: invert ? "Hard" : "Weak" }[tone(v, invert)]);
 
+  /* Google's official Trends embed. It loads only on a normal website, not inside the Claude preview. */
+  const TRENDS_JS = "https://ssl.gstatic.com/trends_nrtr/4031_RC01/embed_loader.js";
+  let trendsReady = null;
+  function loadTrends() {
+    if (window.trends && window.trends.embed) return Promise.resolve(true);
+    if (!trendsReady) trendsReady = new Promise((res) => {
+      const sc = document.createElement("script"); sc.src = TRENDS_JS;
+      sc.onload = () => res(!!(window.trends && window.trends.embed)); sc.onerror = () => res(false);
+      document.head.appendChild(sc); setTimeout(() => res(!!(window.trends && window.trends.embed)), 8000);
+    });
+    return trendsReady;
+  }
+  async function renderTrends(kw) {
+    const geo = $("trGeo"), tm = $("trTime");
+    geo.innerHTML = tm.innerHTML = '<p class="note">Loading Google Trends…</p>';
+    const ok = await loadTrends();
+    if (!ok) { geo.innerHTML = tm.innerHTML = '<p class="note">Google Trends can\'t load here. Open the tool at abbasforpro.github.io/merry-made-rank, or use the Open in Google Trends button.</p>'; return; }
+    const req = { comparisonItem: [{ keyword: kw, geo: "", time: "today 12-m" }], category: 0, property: "" };
+    const opt = { exploreQuery: "q=" + encodeURIComponent(kw) + "&date=today%2012-m", guestPath: "https://trends.google.com:443/trends/embed/" };
+    geo.innerHTML = ""; tm.innerHTML = "";
+    try { window.trends.embed.renderExploreWidgetTo(geo, "GEO_MAP", req, opt); } catch (e) { geo.innerHTML = '<p class="note">Google Trends didn\'t load this time.</p>'; }
+    try { window.trends.embed.renderExploreWidgetTo(tm, "TIMESERIES", req, opt); } catch (e) { tm.innerHTML = '<p class="note">Google Trends didn\'t load this time.</p>'; }
+  }
+
   function render(kw, data) {
+    renderTrends(kw);
     $("kwTrends").href = "https://trends.google.com/trends/explore?date=today%2012-m&q=" + encodeURIComponent(kw);
     const s = scores(data), L = data.results || [];
     $("kwTitle").textContent = "Market snapshot for “" + kw + "”" + (data.example ? " (example)" : "");
