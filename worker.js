@@ -45,7 +45,7 @@ export default {
 
     const url = new URL(request.url);
 
-    if (url.pathname === "/version") return json({ version: 2, google: !!env.GADS_REFRESH_TOKEN });
+    if (url.pathname === "/version") return json({ version: 3, google: !!env.GADS_REFRESH_TOKEN });
 
     if (url.pathname === "/google") {
       const kw = (url.searchParams.get("kw") || "").trim().toLowerCase().slice(0, 80);
@@ -62,6 +62,21 @@ export default {
       } catch (e) {
         return json({ error: String(e.message || e).slice(0, 300) }, 502);
       }
+    }
+
+    // Compact keyword summary: one Etsy call, top 100 listings, only the numbers
+    // research needs (views, favorites, price), so the reply stays tiny.
+    if (url.pathname === "/summary") {
+      const kw = (url.searchParams.get("kw") || "").trim().slice(0, 80);
+      if (!kw) return json({ error: "Missing keyword" }, 400);
+      const key = env.ETSY_KEY;
+      if (!key) return json({ error: "No ETSY_KEY on the worker" }, 401);
+      const res = await fetch(`${ETSY}/listings/active?limit=100&sort_on=score&keywords=${encodeURIComponent(kw)}`, { headers: { "x-api-key": key } });
+      if (!res.ok) return json({ error: "Etsy error " + res.status }, 502);
+      const d = await res.json();
+      const rows = (d.results || []).map((l) => [l.views || 0, l.num_favorers || 0,
+        l.price ? Math.round(l.price.amount / l.price.divisor * 100) / 100 : null, l.price ? l.price.currency_code : null]);
+      return json({ kw, count: d.count || 0, cols: ["views", "favorites", "price", "currency"], rows });
     }
 
     if (!ETSY_PATHS.some((re) => re.test(url.pathname))) {
