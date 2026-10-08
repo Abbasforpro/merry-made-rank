@@ -394,6 +394,17 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
 
   /* ---------- keyword research ---------- */
   let lastData = null, lastKw = "";
+  /* Etsy returns each price in the seller's own currency. Free daily rates convert them to USD. */
+  let fx = null, fxTried = false;
+  async function loadFx() {
+    if (fxTried) return fx; fxTried = true;
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 4000);
+      const r = await fetch("https://open.er-api.com/v6/latest/USD", { signal: ctl.signal }); clearTimeout(t);
+      const j = await r.json(); if (j && j.rates) fx = j.rates;
+    } catch (e) {}
+    return fx;
+  }
   async function research(kw) {
     kw = norm(kw); if (!kw) return;
     lastKw = kw; $("kwInput").value = kw;
@@ -412,6 +423,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
           : "Showing example numbers. " + e.message;
     }
     $("kwGo").disabled = false; $("kwGo").textContent = "Analyze";
+    if (!data.example) await loadFx();
     lastData = data; render(kw, data);
   }
 
@@ -421,13 +433,15 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const top10 = L.slice(0, 10);
     const avgViewsTop = top10.reduce((a, l) => a + (l.views || 0), 0) / Math.max(1, top10.length);
     const medViews = median(views), medFavs = median(favs);
+    const meanViews = views.reduce((a, b) => a + b, 0) / Math.max(1, views.length);
+    const meanFavs = favs.reduce((a, b) => a + b, 0) / Math.max(1, favs.length);
     const favRate = views.reduce((a, b) => a + b, 0) ? favs.reduce((a, b) => a + b, 0) / views.reduce((a, b) => a + b, 0) : 0;
     const demand = clamp(Math.log10(medViews + 1) / Math.log10(3000) * 100);
     const comp = clamp(Math.log10((data.count || 0) + 1) / Math.log10(1000000) * 100);
     const strength = clamp(Math.log10(median(favs.slice(0, 20)) + 1) / Math.log10(1500) * 100);
     const difficulty = Math.round(0.6 * comp + 0.4 * strength);
     const opportunity = Math.round(clamp(demand * 0.7 + (100 - difficulty) * 0.3));
-    return { medViews, medFavs, avgViewsTop, favRate, demand: Math.round(demand), difficulty, opportunity };
+    return { medViews, medFavs, meanViews, meanFavs, avgViewsTop, favRate, demand: Math.round(demand), difficulty, opportunity };
   }
   const tone = (v, invert) => { const x = invert ? 100 - v : v; return x >= 60 ? "good" : x >= 35 ? "warn" : "bad"; };
   const word = (v, invert) => ({ good: invert ? "Easy" : "Strong", warn: "Medium", bad: invert ? "Hard" : "Weak" }[tone(v, invert)]);
@@ -441,7 +455,9 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       stat("Demand score", s.demand + "/100", word(s.demand) + " · median " + fmt(s.medViews) + " views", s.demand, tone(s.demand)) +
       stat("Keyword difficulty", s.difficulty + "/100", word(s.difficulty, true) + " to rank", s.difficulty, tone(s.difficulty, true)) +
       stat("Opportunity", s.opportunity + "/100", "demand weighed against difficulty", s.opportunity, tone(s.opportunity)) +
-      stat("Top 10 avg views", fmt(s.avgViewsTop), "lifetime views per listing") +
+      stat("Avg. views", fmt(s.meanViews), "per listing, top 100 · median " + fmt(s.medViews)) +
+      stat("Avg. favorites", fmt(s.meanFavs), "per listing · median " + fmt(s.medFavs)) +
+      stat("Top 10 avg views", fmt(s.avgViewsTop), "lifetime views, first 10 results") +
       stat("Favorite rate", (s.favRate * 100).toFixed(1) + "%", "favorites per view, top 100");
 
     const freq = {};
@@ -451,10 +467,20 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const mine = new Set(parseTags($("auTags").value));
     $("kwTags").innerHTML = top.map(([t, c]) => `<button type="button" class="chip${mine.has(t) ? " have" : ""}" data-kw="${esc(t)}">${esc(t)}<b>${c}</b></button>`).join("") || '<p class="note">No tag data.</p>';
 
-    const prices = L.map((l) => l.price ? l.price.amount / l.price.divisor : 0).filter((p) => p > 0);
-    const cur = (L[0] && L[0].price && L[0].price.currency_code) || "USD";
+    const raw = L.filter((l) => l.price && l.price.amount > 0).map((l) => ({ v: l.price.amount / l.price.divisor, c: l.price.currency_code || "USD" }));
+    const curs = {}; raw.forEach((x) => { curs[x.c] = (curs[x.c] || 0) + 1; });
+    let prices, cur, pnote = "";
+    if (fx) {
+      prices = raw.map((x) => x.c === "USD" ? x.v : (fx[x.c] ? x.v / fx[x.c] : null)).filter((x) => x != null);
+      cur = "USD";
+      if (Object.keys(curs).length > 1) pnote = " · converted to USD from " + Object.keys(curs).length + " currencies";
+    } else {
+      cur = Object.entries(curs).sort((a, b) => b[1] - a[1])[0]?.[0] || "USD";
+      prices = raw.filter((x) => x.c === cur).map((x) => x.v);
+      if (Object.keys(curs).length > 1) pnote = ` · only the ${prices.length} listings priced in ${cur}`;
+    }
     $("kwPrice").innerHTML = prices.length ? histogram(prices, 6, (a, b) => a.toFixed(0) + "–" + b.toFixed(0)) +
-      `<p class="note">Median ${median(prices).toFixed(2)} ${esc(cur)} · range ${Math.min(...prices).toFixed(2)} to ${Math.max(...prices).toFixed(2)}</p>` : "";
+      `<p class="note">Median ${median(prices).toFixed(2)} ${esc(cur)} · range ${Math.min(...prices).toFixed(2)} to ${Math.max(...prices).toFixed(2)}${esc(pnote)}</p>` : "";
     const now = Date.now() / 1000;
     const ages = L.map((l) => (now - (l.original_creation_timestamp || l.creation_timestamp || now)) / 86400 / 365);
     const buckets = [["< 6 mo", 0, 0.5], ["6–12 mo", 0.5, 1], ["1–2 yr", 1, 2], ["2–4 yr", 2, 4], ["4+ yr", 4, 99]];
