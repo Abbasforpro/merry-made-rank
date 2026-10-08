@@ -66,7 +66,9 @@ a.btn { text-decoration: none; display: inline-block; }
 .gstat .k { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; }
 .gstat .v { font: 700 1.9rem/1.1 var(--display); font-variant-numeric: tabular-nums; }
 .gstat .s { font-size: 0.8rem; color: var(--muted); }
-.gstat .v .good { color: var(--good); } .gstat .v .warn { color: var(--warn); } .gstat .v .bad { color: var(--bad); }
+.gstat.c-green { background: #1f7a45; } .gstat.c-blue { background: #1d5fd1; } .gstat.c-orange { background: #b85600; } .gstat.c-red { background: #c0362c; }
+.gstat[class*="c-"] { border-color: transparent; color: #fff; }
+.gstat[class*="c-"] .k, .gstat[class*="c-"] .s { color: rgba(255, 255, 255, 0.88); }
 .gtrend svg { width: 100%; height: auto; display: block; }
 .gcountries { display: grid; gap: 12px; }
 .gcountry { display: grid; gap: 4px; }
@@ -736,17 +738,19 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const L = data.results || [], s = scores(data);
     const usd = L.map(usdOf).filter((v) => v != null);
     const avgP = usd.reduce((a, b) => a + b, 0) / Math.max(1, usd.length);
-    // Competition colors set by the user: under 10k green, 10k to 50k orange, 50k and up red.
-    const n = data.count || 0, compTone = n < 10000 ? "good" : n < 50000 ? "warn" : "bad";
-    const compWord = n < 10000 ? "Low" : n < 50000 ? "Medium" : "High", compPct = Math.min(100, Math.log10(n + 1) / 6 * 100);
-    const kdWord = s.kd < 42 ? "Easy" : s.kd < 47 ? "Medium" : "Hard", kdTone = s.kd < 42 ? "good" : s.kd < 47 ? "warn" : "bad";
-    const st = (k, v, sub, extra = "") => `<div class="gstat"><span class="k">${k}</span><span class="v">${v}</span>${extra}<span class="s">${sub}</span></div>`;
+    // Colour bands set by the user. Each card is filled with its band colour, text in white.
+    const band = (v, cuts, words) => { const i = cuts.findIndex((c) => c(v)); return { c: ["c-green", "c-blue", "c-orange", "c-red"][i], w: words[i] }; };
+    const n = data.count || 0;
+    const comp = band(n, [(v) => v <= 10000, (v) => v <= 39000, (v) => v <= 50000, () => true], ["Low", "Fair", "Medium", "High"]);
+    const kdB = band(s.kd, [(v) => v <= 20, (v) => v <= 30, (v) => v <= 50, () => true], ["Easy", "Fair", "Medium", "Hard"]);
+    const vw = band(s.meanViews, [(v) => v >= 5000, (v) => v >= 2000, (v) => v >= 500, () => true], ["High demand", "Good demand", "Some demand", "Low demand"]);
+    const st = (k, v, sub, cls = "") => `<div class="gstat ${cls}"><span class="k">${k}</span><span class="v">${v}</span><span class="s">${sub}</span></div>`;
     $("gStats").innerHTML =
-      st("Competition", `<span class="${compTone}">${fmt(data.count || 0)}</span>`, compWord + " · Etsy listings", `<div class="meter"><i class="${compTone}" style="width:${compPct}%"></i></div>`) +
-      st("Avg. views", fmt(s.meanViews), "per listing, top " + L.length) +
+      st("Competition", fmt(n), comp.w + " · Etsy listings", comp.c) +
+      st("Avg. views", fmt(s.meanViews), vw.w + " · per listing", vw.c) +
       st("Avg. price", usd.length ? "$" + avgP.toFixed(2) : "–", usd.length ? "median $" + median(usd).toFixed(2) + " · USD" : "") +
       st("Favorites %", (s.favRate * 100).toFixed(1) + "%", "favorites per view") +
-      st("KD", s.kd + "/100", kdWord + " to rank", `<div class="meter"><i class="${kdTone}" style="width:${s.kd}%"></i></div>`) +
+      st("KD", s.kd + "/100", kdB.w + " to rank", kdB.c) +
       `<div class="gstat"><span class="k">Google searches</span><span class="v" id="gGVol">…</span><span class="s" id="gGVolS">per month, worldwide</span></div>` +
       `<div class="gstat"><span class="k">Ad competition</span><span class="v" id="gAds">…</span><span class="s" id="gAdsS">Google Ads</span></div>`;
     $("gTopTitle").textContent = "Top 10 listings" + (example ? " (example)" : "");
