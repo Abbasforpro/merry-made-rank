@@ -5,7 +5,7 @@
 //
 // Secrets (Settings > Variables and Secrets, type Secret):
 //   ETSY_KEY             keystring:shared_secret
-//   GADS_DEV_TOKEN       Google Ads API developer token (Basic access)
+//   GADS_DEV_TOKEN       optional: old-style developer token (Google now grants access per Cloud project)
 //   GADS_CLIENT_ID       Google Cloud OAuth client ID
 //   GADS_CLIENT_SECRET   Google Cloud OAuth client secret
 //   GADS_REFRESH_TOKEN   refresh token for the adwords scope
@@ -45,12 +45,12 @@ export default {
 
     const url = new URL(request.url);
 
-    if (url.pathname === "/version") return json({ version: 2, google: !!(env.GADS_DEV_TOKEN && env.GADS_REFRESH_TOKEN) });
+    if (url.pathname === "/version") return json({ version: 2, google: !!env.GADS_REFRESH_TOKEN });
 
     if (url.pathname === "/google") {
       const kw = (url.searchParams.get("kw") || "").trim().toLowerCase().slice(0, 80);
       if (!kw) return json({ error: "Missing keyword" }, 400);
-      if (!env.GADS_DEV_TOKEN || !env.GADS_REFRESH_TOKEN) return json({ error: "NOT_SET_UP" }, 503);
+      if (!env.GADS_REFRESH_TOKEN) return json({ error: "NOT_SET_UP" }, 503);
       // Cache each keyword for 7 days so Google quota lasts.
       const cacheKey = new Request("https://cache.merry-made-rank/google?kw=" + encodeURIComponent(kw));
       const cached = await caches.default.match(cacheKey);
@@ -94,7 +94,8 @@ async function googleToken(env) {
 async function historical(env, token, kw, geoIds) {
   const v = env.GADS_API_VERSION || "v23";
   const cid = String(env.GADS_CUSTOMER_ID).replace(/\D/g, "");
-  const headers = { Authorization: "Bearer " + token, "developer-token": env.GADS_DEV_TOKEN, "Content-Type": "application/json" };
+  const headers = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
+  if (env.GADS_DEV_TOKEN) headers["developer-token"] = env.GADS_DEV_TOKEN;
   if (env.GADS_LOGIN_ID) headers["login-customer-id"] = String(env.GADS_LOGIN_ID).replace(/\D/g, "");
   const body = { keywords: [kw], keywordPlanNetwork: "GOOGLE_SEARCH", language: "languageConstants/1000" };
   if (geoIds) body.geoTargetConstants = geoIds.map((g) => "geoTargetConstants/" + g);
