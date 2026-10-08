@@ -283,6 +283,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       <h2>Connect free live data</h2>
       <p class="note">The listing optimizer, title builder and fee calculator work everywhere with no setup. Live keyword numbers need a free Etsy developer key, and the page must run from a normal website (free GitHub Pages works) because this preview blocks outside connections.</p>
       <label>Etsy API key (keystring:shared secret)<input id="apiKey" placeholder="abc123xyz:secret456" autocomplete="off"></label>
+      <label>Connector address (leave empty unless you set one up below)<input id="proxyUrl" placeholder="https://merry-made-rank.yourname.workers.dev" autocomplete="off"></label>
       <div class="row"><button class="btn" id="keySave" type="button">Save key in this browser</button><button class="btn ghost" id="keyTest" type="button">Test connection</button></div>
       <div id="keyMsg" class="note"></div>
       <details open>
@@ -292,6 +293,16 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
           <li>Describe it honestly, for example "personal keyword research for my own shop". Pick the personal access option.</li>
           <li>Once approved, copy the Keystring and Shared Secret and paste them above as keystring:secret.</li>
           <li>The free tier allows about 10,000 requests a day. One keyword analysis uses 1 request, Load top shops uses up to 20.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>Set up the free connector (only if Test connection asks for it)</summary>
+        <ol class="steps">
+          <li>Etsy blocks websites from calling it straight from the browser. A tiny free Cloudflare Worker passes the request along for you. The free plan allows 100,000 requests a day.</li>
+          <li>Sign up free at dash.cloudflare.com. Open Workers &amp; Pages, choose Create, then Create Worker. Name it merry-made-rank and click Deploy.</li>
+          <li>Click Edit code, delete what's there, paste the contents of worker.js from github.com/Abbasforpro/merry-made-rank, and click Deploy.</li>
+          <li>Optional but safer: in the worker's Settings, under Variables and Secrets, add a Secret named ETSY_KEY with your keystring:secret. Then leave the key box above empty.</li>
+          <li>Copy the worker address, for example https://merry-made-rank.yourname.workers.dev, paste it in Connector address above, and tap Test connection.</li>
         </ol>
       </details>
       <details>
@@ -334,13 +345,16 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
 
   /* ---------- Etsy API ---------- */
   const API = "https://openapi.etsy.com/v3/application";
-  const getKey = () => (store.get("tb.key") || "").trim();
+  const getKey = () => (store.get("tb.key") || "").replace(/\s+/g, "");
+  const getProxy = () => (store.get("tb.proxy") || "").trim().replace(/\/+$/, "");
   async function etsy(path) {
-    const key = getKey();
-    if (!key) throw new Error("NOKEY");
+    const key = getKey(), proxy = getProxy();
+    if (!key && !proxy) throw new Error("NOKEY");
+    if (key && /[^\x21-\x7e]/.test(key)) throw new Error("The key contains characters that aren't letters, numbers or a colon. Copy the Keystring and Shared Secret again from your Etsy app page.");
+    if (key && !key.includes(":")) throw new Error("The key needs both parts joined by a colon: Keystring, then :, then Shared Secret.");
     let res;
-    try { res = await fetch(API + path, { headers: { "x-api-key": key } }); }
-    catch (e) { throw new Error("BLOCKED"); }
+    try { res = await fetch((proxy || API) + path, { headers: key ? { "x-api-key": key } : {} }); }
+    catch (e) { throw new Error(proxy ? "PROXYFAIL" : "BLOCKED"); }
     if (res.status === 401 || res.status === 403) throw new Error("Etsy rejected the key. Check it is keystring:shared secret and the app is approved.");
     if (res.status === 429) throw new Error("Etsy's free request limit was hit. Wait a minute and try again.");
     if (!res.ok) throw new Error("Etsy returned error " + res.status + ".");
@@ -383,8 +397,8 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       $("kwBanner").hidden = false;
       $("kwBanner").textContent = e.message === "NOKEY"
         ? "Showing example numbers. Add your free Etsy API key in Setup to see real data for any keyword."
-        : e.message === "BLOCKED"
-          ? "Showing example numbers. This page can't reach Etsy from here; run it from your own free GitHub Pages site (see Setup)."
+        : e.message === "BLOCKED" || e.message === "PROXYFAIL"
+          ? "Showing example numbers. Your browser couldn't reach Etsy. Open Setup and run Test connection for the fix."
           : "Showing example numbers. " + e.message;
     }
     $("kwGo").disabled = false; $("kwGo").textContent = "Analyze";
@@ -639,12 +653,14 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
 
   /* ---------- setup ---------- */
   $("apiKey").value = getKey();
-  $("keySave").addEventListener("click", () => { store.set("tb.key", $("apiKey").value.trim()); $("keyMsg").textContent = "Saved in this browser only. It is never sent anywhere except Etsy."; });
+  $("proxyUrl").value = getProxy();
+  const saveSetup = () => { store.set("tb.key", $("apiKey").value.replace(/\s+/g, "")); store.set("tb.proxy", $("proxyUrl").value.trim()); };
+  $("keySave").addEventListener("click", () => { saveSetup(); $("keyMsg").textContent = "Saved in this browser only."; });
   $("keyTest").addEventListener("click", async () => {
-    store.set("tb.key", $("apiKey").value.trim());
+    saveSetup();
     $("keyMsg").textContent = "Testing…";
     try { const d = await etsy("/listings/active?limit=1&keywords=mug"); $("keyMsg").textContent = "Connected. Etsy reports " + fmt(d.count) + " active listings for “mug”."; }
-    catch (e) { $("keyMsg").textContent = e.message === "NOKEY" ? "Paste your key first." : e.message === "BLOCKED" ? "This page can't reach Etsy from here. Host it on GitHub Pages (steps below) and test again." : e.message; }
+    catch (e) { $("keyMsg").textContent = e.message === "NOKEY" ? "Paste your key first." : e.message === "BLOCKED" ? (location.hostname.endsWith("github.io") ? "Etsy doesn't let browsers call it directly from a website. Set up the free connector below, paste its address above, and test again." : "This page can't reach Etsy from here. Open abbasforpro.github.io/merry-made-rank and test again.") : e.message === "PROXYFAIL" ? "Couldn't reach the connector address. Check it matches the address Cloudflare shows for your worker." : e.message; }
   });
 
   /* ---------- copy helper ---------- */
