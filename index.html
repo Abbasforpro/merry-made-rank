@@ -59,6 +59,8 @@ textarea { min-height: 72px; resize: vertical; }
 .grow { flex: 1 1 260px; }
 .btn { font: 600 0.92rem var(--body); background: var(--accent); color: var(--card); border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; white-space: nowrap; }
 .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+a.btn { text-decoration: none; display: inline-block; }
+.row.buyers { align-items: center; }
 .btn:disabled { opacity: 0.55; cursor: wait; }
 .note { font-size: 0.86rem; color: var(--muted); margin: 0; max-width: 75ch; }
 .banner { border: 1px dashed var(--mark); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: var(--ink); background: color-mix(in srgb, var(--mark) 10%, var(--card)); }
@@ -141,6 +143,12 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       <h2 id="kwTitle">Market snapshot</h2>
       <div class="stats" id="kwStats"></div>
       <p class="note">Competition is the real count of active Etsy listings for the phrase. Views and favorites come from the top 100 listings Etsy ranks for it. Etsy does not publish search volume to anyone, so the demand and difficulty scores here are estimates built from those numbers.</p>
+      <div class="row buyers">
+        <span class="note"><strong>Where are buyers searching?</strong> Check this keyword by country:</span>
+        <a class="btn ghost" id="kwTrends" href="https://trends.google.com/trends/explore?date=today%2012-m" target="_blank" rel="noopener">Google Trends by country ↗</a>
+        <a class="btn ghost" id="kwPlanner" href="https://ads.google.com/aw/keywordplanner/home" target="_blank" rel="noopener">Keyword Planner ↗</a>
+      </div>
+      <p class="note" id="kwTrendsNote">Google Trends opens with this keyword filled in. Scroll down to "Interest by region" to see the top countries. In Keyword Planner, choose "Get search volume", paste the keyword (copied for you when you click), and set Locations to see volume per country.</p>
     </div>
 
     <div class="two">
@@ -449,6 +457,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
   const word = (v, invert) => ({ good: invert ? "Easy" : "Strong", warn: "Medium", bad: invert ? "Hard" : "Weak" }[tone(v, invert)]);
 
   function render(kw, data) {
+    $("kwTrends").href = "https://trends.google.com/trends/explore?date=today%2012-m&q=" + encodeURIComponent(kw);
     const s = scores(data), L = data.results || [];
     $("kwTitle").textContent = "Market snapshot for “" + kw + "”" + (data.example ? " (example)" : "");
     const stat = (k, v, sub, pct, t) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span>${pct != null ? `<div class="meter"><i class="${t}" style="width:${pct}%"></i></div>` : ""}<span class="s">${sub}</span></div>`;
@@ -513,6 +522,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     return c.map((x, i) => barRow(lab(lo + i * w, i === n - 1 ? s[s.length - 1] : lo + (i + 1) * w), x, mx)).join("");
   }
 
+  $("kwPlanner").addEventListener("click", () => { try { navigator.clipboard.writeText(lastKw).catch(() => {}); } catch (e) {} });
   $("kwForm").addEventListener("submit", (e) => { e.preventDefault(); research($("kwInput").value); });
   $("kwTags").addEventListener("click", (e) => { const b = e.target.closest("[data-kw]"); if (b) { research(b.dataset.kw); window.scrollTo({ top: 0 }); } });
 
