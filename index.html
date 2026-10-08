@@ -61,6 +61,14 @@ textarea { min-height: 72px; resize: vertical; }
 .btn { font: 600 0.92rem var(--body); background: var(--accent); color: var(--card); border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; white-space: nowrap; }
 .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
 a.btn { text-decoration: none; display: inline-block; }
+.donut { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.donut svg { width: 132px; height: 132px; flex: none; }
+.donut .legend { display: grid; gap: 6px; font-size: 0.88rem; min-width: 0; }
+.donut .legend span.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+.bars.wide .bar { grid-template-columns: minmax(110px, 200px) 1fr 40px; }
+.bars.wide .bar .lbl { text-align: left; font-family: var(--body); font-size: 0.82rem; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .track i.good { background: var(--good); } .bar .track i.warn { background: var(--warn); } .bar .track i.bad { background: var(--bad); }
+td button.linkish { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-align: left; text-decoration: underline; }
 .trends { min-height: 120px; min-width: 0; overflow: hidden; }
 .trends iframe { width: 100% !important; }
 .btn:disabled { opacity: 0.55; cursor: wait; }
@@ -145,7 +153,12 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       <h2 id="kwTitle">Market snapshot</h2>
       <div class="stats" id="kwStats"></div>
       <p class="note">Competition is the real count of active Etsy listings for the phrase. Views and favorites come from the top 100 listings Etsy ranks for it. Etsy does not publish search volume to anyone, so the demand and difficulty scores here are estimates built from those numbers.</p>
+    </div>
 
+    <div class="box">
+      <h2>Market activity</h2>
+      <div class="stats" id="kwActivity"></div>
+      <p class="note">Daily and weekly views are each listing's lifetime views divided by how long it has been listed, averaged across the top 100.</p>
     </div>
 
     <div class="two">
@@ -177,6 +190,30 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
         <h3>Listing age</h3>
         <div class="bars" id="kwAge"></div>
       </div>
+    </div>
+
+    <div class="two">
+      <div class="box">
+        <h2>Competition mix</h2>
+        <div class="donut" id="kwMix"></div>
+        <p class="note">Top 100 listings grouped by favorites. Lots of low-favorite listings means shoppers haven't settled on winners yet.</p>
+      </div>
+      <div class="box">
+        <h2>Difficulty spread</h2>
+        <div class="donut" id="kwSpread"></div>
+        <p class="note">Top 100 listings grouped by lifetime views. Easy ones are the listings a new, well-optimized listing can outrank.</p>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="row" style="justify-content:space-between">
+        <h2>Related keywords</h2>
+        <span class="note" id="relStatus"></span>
+      </div>
+      <div class="scroll"><table id="relTable"></table></div>
+      <h3>Best keyword opportunities</h3>
+      <div class="bars wide" id="relBest"></div>
+      <p class="note">Related phrases come from Google autocomplete and the tags top sellers use. Each one is checked live on Etsy (1 lookup each). Tap a keyword to research it.</p>
     </div>
 
     <div class="box">
@@ -548,7 +585,84 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
         return `<tr><td class="n">${i + 1}</td><td>${link}</td><td class="n">${p}</td><td class="n">${fmt(l.views || 0)}</td><td class="n">${fmt(l.num_favorers || 0)}</td><td class="n">${fr}</td></tr>`;
       }).join("") + "</tbody>";
     $("shopsBox").hidden = true;
+    renderActivity(L);
+    renderDonuts(L);
+    renderRelated(kw, top.map(([t]) => t), data.example);
     renderAudit();
+  }
+
+  function renderActivity(L) {
+    const now = Date.now() / 1000;
+    const views = L.map((l) => l.views || 0);
+    const total = views.reduce((a, b) => a + b, 0);
+    const daily = L.map((l) => (l.views || 0) / Math.max(1, (now - (l.original_creation_timestamp || l.creation_timestamp || now)) / 86400));
+    const avgDaily = daily.reduce((a, b) => a + b, 0) / Math.max(1, daily.length);
+    const favs = L.reduce((a, l) => a + (l.num_favorers || 0), 0);
+    const st = (k, v, sub) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="s">${sub}</span></div>`;
+    $("kwActivity").innerHTML =
+      st("Listings analyzed", L.length, "live sample") +
+      st("Total views", fmt(total), "lifetime, top " + L.length) +
+      st("Total favorites", fmt(favs), "lifetime, top " + L.length) +
+      st("Avg. daily views", avgDaily < 10 ? avgDaily.toFixed(2) : fmt(avgDaily), "views / day per listing") +
+      st("Avg. weekly views", avgDaily * 7 < 10 ? (avgDaily * 7).toFixed(2) : fmt(avgDaily * 7), "views / week per listing");
+  }
+
+  function donut(el, parts, centerLabel) {
+    const total = parts.reduce((a, p) => a + p.n, 0) || 1, r = 52, c = 2 * Math.PI * r;
+    let off = 0;
+    const arcs = parts.map((p) => {
+      const len = p.n / total * c;
+      const seg = `<circle cx="66" cy="66" r="${r}" fill="none" stroke="var(--${p.tone})" stroke-width="18" stroke-dasharray="${len} ${c - len}" stroke-dashoffset="${-off}" transform="rotate(-90 66 66)"></circle>`;
+      off += len; return seg;
+    }).join("");
+    el.innerHTML = `<svg viewBox="0 0 132 132" role="img" aria-label="${esc(centerLabel)}"><circle cx="66" cy="66" r="${r}" fill="none" stroke="var(--line)" stroke-width="18"></circle>${arcs}<text x="66" y="64" text-anchor="middle" font-size="22" font-weight="700" fill="var(--ink)">${total}</text><text x="66" y="82" text-anchor="middle" font-size="10" fill="var(--muted)">listings</text></svg>` +
+      `<div class="legend">${parts.map((p) => `<div><span class="sw" style="background:var(--${p.tone})"></span>${esc(p.label)} <b class="mono">${p.n}</b> <span class="note">(${Math.round(p.n / total * 100)}%)</span></div>`).join("")}</div>`;
+  }
+  function renderDonuts(L) {
+    const f = L.map((l) => l.num_favorers || 0), v = L.map((l) => l.views || 0);
+    donut($("kwMix"), [
+      { label: "Low competition (under 10 favorites)", n: f.filter((x) => x < 10).length, tone: "good" },
+      { label: "Medium (10 to 99 favorites)", n: f.filter((x) => x >= 10 && x < 100).length, tone: "warn" },
+      { label: "High (100+ favorites)", n: f.filter((x) => x >= 100).length, tone: "bad" }
+    ], "Competition mix");
+    donut($("kwSpread"), [
+      { label: "Easy to beat (under 100 views)", n: v.filter((x) => x < 100).length, tone: "good" },
+      { label: "Medium (100 to 999 views)", n: v.filter((x) => x >= 100 && x < 1000).length, tone: "warn" },
+      { label: "Hard (1,000+ views)", n: v.filter((x) => x >= 1000).length, tone: "bad" }
+    ], "Difficulty spread");
+  }
+
+  let relRun = 0;
+  async function renderRelated(kw, topTags, example) {
+    const run = ++relRun;
+    $("relTable").innerHTML = ""; $("relBest").innerHTML = "";
+    $("relStatus").textContent = "Finding related keywords…";
+    let sugg = [];
+    if (!example) { const r = await suggest(kw); if (r) sugg = r.map((x) => norm(String(x))); }
+    if (run !== relRun) return;
+    const seen = new Set([kw]), cands = [];
+    sugg.forEach((k) => { if (k && !seen.has(k) && cands.length < 8) { seen.add(k); cands.push({ k, src: "Google" }); } });
+    topTags.forEach((k) => { if (k && !seen.has(k) && cands.length < 15) { seen.add(k); cands.push({ k, src: "Top tag" }); } });
+    const rows = [];
+    const paint = () => {
+      const sorted = [...rows].sort((a, b) => b.s.opportunity - a.s.opportunity);
+      $("relTable").innerHTML = "<thead><tr><th>Keyword</th><th>Source</th><th class='n'>Competing</th><th class='n'>Avg views</th><th class='n'>Avg favs</th><th class='n'>Fav %</th><th class='n'>Difficulty</th><th class='n'>Opportunity</th></tr></thead><tbody>" +
+        sorted.map((r) => `<tr><td><button type="button" class="linkish" data-kw="${esc(r.k)}">${esc(r.k)}</button></td><td>${r.src}</td><td class="n">${fmt(r.count)}</td><td class="n">${fmt(r.s.meanViews)}</td><td class="n">${fmt(r.s.meanFavs)}</td><td class="n">${(r.s.favRate * 100).toFixed(1)}</td><td class="n"><span class="pill ${tone(r.s.difficulty, true)}">${r.s.difficulty}</span></td><td class="n"><span class="pill ${tone(r.s.opportunity)}">${r.s.opportunity}</span></td></tr>`).join("") + "</tbody>";
+      $("relBest").innerHTML = sorted.slice(0, 10).map((r) => `<div class="bar"><span class="lbl" title="${esc(r.k)}">${esc(r.k)}</span><span class="track"><i class="${tone(r.s.opportunity)}" style="width:${r.s.opportunity}%"></i></span><span class="ct">${r.s.opportunity}</span></div>`).join("");
+    };
+    for (let i = 0; i < cands.length; i += 4) {
+      const part = await Promise.all(cands.slice(i, i + 4).map(async (c) => {
+        try {
+          const d = example ? exampleData(c.k) : await etsy("/listings/active?limit=25&sort_on=score&keywords=" + encodeURIComponent(c.k));
+          if (example) d.results = d.results.slice(0, 25);
+          return { ...c, count: d.count || 0, s: scores(d) };
+        } catch (e) { return null; }
+      }));
+      if (run !== relRun) return;
+      rows.push(...part.filter(Boolean)); paint();
+      $("relStatus").textContent = `Checked ${rows.length} of ${cands.length} on Etsy${example ? " (example data)" : ""}`;
+    }
+    if (!rows.length) $("relStatus").textContent = "Couldn't check related keywords right now.";
   }
   function barRow(label, c, mx) { return `<div class="bar"><span class="lbl">${esc(label)}</span><span class="track"><i style="width:${c / mx * 100}%"></i></span><span class="ct">${c}</span></div>`; }
   function histogram(vals, n, lab) {
@@ -562,6 +676,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
   }
 
   $("kwPlanner").addEventListener("click", () => { try { navigator.clipboard.writeText(lastKw).catch(() => {}); } catch (e) {} });
+  $("relTable").addEventListener("click", (e) => { const b = e.target.closest("[data-kw]"); if (b) { research(b.dataset.kw); window.scrollTo({ top: 0 }); } });
   $("kwForm").addEventListener("submit", (e) => { e.preventDefault(); research($("kwInput").value); });
   $("kwTags").addEventListener("click", (e) => { const b = e.target.closest("[data-kw]"); if (b) { research(b.dataset.kw); window.scrollTo({ top: 0 }); } });
 
