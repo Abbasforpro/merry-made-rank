@@ -283,7 +283,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       <h2>Connect free live data</h2>
       <p class="note">The listing optimizer, title builder and fee calculator work everywhere with no setup. Live keyword numbers need a free Etsy developer key, and the page must run from a normal website (free GitHub Pages works) because this preview blocks outside connections.</p>
       <label>Etsy API key (keystring:shared secret)<input id="apiKey" placeholder="abc123xyz:secret456" autocomplete="off"></label>
-      <label>Connector address (leave empty unless you set one up below)<input id="proxyUrl" placeholder="https://merry-made-rank.yourname.workers.dev" autocomplete="off"></label>
+      <label>Connector address (already filled in for your team)<input id="proxyUrl" placeholder="https://merry-made-rank.yourname.workers.dev" autocomplete="off"></label>
       <div class="row"><button class="btn" id="keySave" type="button">Save key in this browser</button><button class="btn ghost" id="keyTest" type="button">Test connection</button></div>
       <div id="keyMsg" class="note"></div>
       <details open>
@@ -352,7 +352,9 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     if (!/^https?:\/\//i.test(v)) v = "https://" + v;
     try { return new URL(v).origin; } catch (e) { return v.replace(/\/+$/, ""); }
   }
-  const getProxy = () => cleanProxy(store.get("tb.proxy"));
+  /* Shared connector for the team. Anyone can still paste a different one in Setup. */
+  const DEFAULT_PROXY = "https://merry-made-rank.muhammadabbasenv.workers.dev";
+  const getProxy = () => { const v = store.get("tb.proxy"); return v === null ? DEFAULT_PROXY : cleanProxy(v); };
   async function etsy(path) {
     const key = getKey(), proxy = getProxy();
     if (!key && !proxy) throw new Error("NOKEY");
