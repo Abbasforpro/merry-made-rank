@@ -16,7 +16,9 @@
 const ETSY = "https://openapi.etsy.com/v3/application";
 const ALLOWED_ORIGINS = ["https://abbasforpro.github.io"];
 // Only the read-only lookups the page uses, so the worker isn't an open proxy.
-const ETSY_PATHS = [/^\/listings\/active$/, /^\/listings\/batch$/, /^\/shops\/\d+$/];
+const ETSY_PATHS = [/^\/listings\/active$/, /^\/listings\/batch$/, /^\/shops\/\d+$/,
+  // Shop lookup: find a shop by name, then read its active listings and reviews.
+  /^\/shops$/, /^\/shops\/\d+\/listings\/active$/, /^\/shops\/\d+\/reviews$/];
 
 // Countries checked for "most searched in". Google geo target IDs.
 const COUNTRIES = [
@@ -45,7 +47,7 @@ export default {
 
     const url = new URL(request.url);
 
-    if (url.pathname === "/version") return json({ version: 3, google: !!env.GADS_REFRESH_TOKEN });
+    if (url.pathname === "/version") return json({ version: 4, google: !!env.GADS_REFRESH_TOKEN });
 
     if (url.pathname === "/google") {
       const kw = (url.searchParams.get("kw") || "").trim().toLowerCase().slice(0, 80);
