@@ -733,15 +733,18 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     $("gInput").value = kw; $("kwInput").value = kw;
     $("gGo").disabled = true; $("gGo").textContent = "Analyzing…";
     $("gTrend").innerHTML = $("gCountries").innerHTML = '<p class="note">Loading Google data…</p>';
-    let data, example = false;
-    try { data = await etsy("/listings/active?limit=100&sort_on=score&keywords=" + encodeURIComponent(kw)); $("gBanner").hidden = true; }
-    catch (e) {
-      data = exampleData(kw); example = true;
-      $("gBanner").hidden = false;
-      $("gBanner").textContent = "Showing example numbers. " + (e.message === "NOKEY" ? "Add the connector in Setup for real data." : e.message === "BLOCKED" || e.message === "PROXYFAIL" ? "This page couldn't reach Etsy. Open abbasforpro.github.io/merry-made-rank." : e.message);
-    }
+    // Clear the previous keyword's cards so they never sit on screen under the new keyword.
+    $("gWin").hidden = true;
+    $("gStats").innerHTML = '<p class="note">Loading Etsy data…</p>';
+    $("gTop").innerHTML = "";
+    let data, example = false, err = null;
+    try { data = await etsy("/listings/active?limit=100&sort_on=score&keywords=" + encodeURIComponent(kw)); }
+    catch (e) { data = exampleData(kw); example = true; err = e; }
     if (!example) await loadFx();
+    // A newer analysis started while this one was waiting: drop this response.
     if (run !== gRun) return;
+    $("gBanner").hidden = !err;
+    if (err) $("gBanner").textContent = "Showing example numbers. " + (err.message === "NOKEY" ? "Add the connector in Setup for real data." : err.message === "BLOCKED" || err.message === "PROXYFAIL" ? "This page couldn't reach Etsy. Open abbasforpro.github.io/merry-made-rank." : err.message);
     $("gGo").disabled = false; $("gGo").textContent = "Analyze";
     const L = data.results || [], s = scores(data);
     const usd = L.map(usdOf).filter((v) => v != null);
