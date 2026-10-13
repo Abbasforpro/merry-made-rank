@@ -558,6 +558,9 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const avgViewsTop = top10.reduce((a, l) => a + (l.views || 0), 0) / Math.max(1, top10.length);
     const medViews = median(views), medFavs = median(favs);
     const meanViews = views.reduce((a, b) => a + b, 0) / Math.max(1, views.length);
+    const nowS = Date.now() / 1000;
+    const meanDailyViews = L.map((l) => (l.views || 0) / Math.max(1, (nowS - (l.original_creation_timestamp || l.creation_timestamp || nowS)) / 86400))
+      .reduce((a, b) => a + b, 0) / Math.max(1, L.length);
     const meanFavs = favs.reduce((a, b) => a + b, 0) / Math.max(1, favs.length);
     const favRate = views.reduce((a, b) => a + b, 0) ? favs.reduce((a, b) => a + b, 0) / views.reduce((a, b) => a + b, 0) : 0;
     const demand = clamp(Math.log10(medViews + 1) / Math.log10(3000) * 100);
@@ -565,9 +568,11 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const strength = clamp(Math.log10(median(favs.slice(0, 20)) + 1) / Math.log10(1500) * 100);
     const difficulty = Math.round(0.6 * comp + 0.4 * strength);
     const opportunity = Math.round(clamp(demand * 0.7 + (100 - difficulty) * 0.3));
-    // Gallery KD, fitted to rankkw's published KD for six keywords (within about 2 points). Their real formula isn't public.
-    const kd = Math.round(clamp(36 + 1.9 * Math.log10((data.count || 0) + 1)));
-    return { medViews, medFavs, meanViews, meanFavs, avgViewsTop, favRate, demand: Math.round(demand), difficulty, opportunity, kd };
+    // KD is the measured difficulty: 60% competition size + 40% top-20 competitor
+    // strength (median favorites). Same 0-100 scale as the research tab, so the
+    // gallery card and research tab can never disagree again.
+    const kd = difficulty;
+    return { medViews, medFavs, meanViews, meanDailyViews, meanFavs, avgViewsTop, favRate, demand: Math.round(demand), difficulty, opportunity, kd };
   }
   const tone = (v, invert) => { const x = invert ? 100 - v : v; return x >= 60 ? "good" : x >= 35 ? "warn" : "bad"; };
   const word = (v, invert) => ({ good: invert ? "Easy" : "Strong", warn: "Medium", bad: invert ? "Hard" : "Weak" }[tone(v, invert)]);
@@ -745,10 +750,10 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const band = (v, cuts, words) => { const i = cuts.findIndex((c) => c(v)); return { c: ["c-green", "c-blue", "c-orange", "c-red"][i], w: words[i] }; };
     const n = data.count || 0;
     const comp = band(n, [(v) => v <= 10000, (v) => v <= 39000, (v) => v <= 50000, () => true], ["Low", "Fair", "Medium", "High"]);
-    const kdB = band(s.kd, [(v) => v <= 42, (v) => v <= 44, (v) => v <= 47, () => true], ["Easy", "Fair", "Medium", "Hard"]);
-    const vw = band(s.meanViews, [(v) => v >= 2000, (v) => v >= 1000, (v) => v >= 500, () => true], ["High demand", "Good demand", "Some demand", "Low demand"]);
+    const kdB = band(s.kd, [(v) => v <= 50, (v) => v <= 65, (v) => v <= 80, () => true], ["Easy", "Fair", "Medium", "Hard"]);
+    const vw = band(s.meanDailyViews, [(v) => v >= 10, (v) => v >= 3, (v) => v >= 1, () => true], ["High demand", "Good demand", "Some demand", "Low demand"]);
     // Winner rules set by the user: competition under 10k, views 1,000+, price over $2, favorites over 1%.
-    const checks = [[n < 10000, "competition under 10k"], [s.meanViews >= 1000, "views 1,000+"], [usd.length && avgP > 2, "price over $2"], [s.favRate > 0.01, "favorites over 1%"]];
+    const checks = [[n < 10000, "competition under 10k"], [s.meanDailyViews >= 3, "views 3+/day"], [usd.length && avgP > 2, "price over $2"], [s.favRate > 0.01, "favorites over 1%"]];
     const fails = checks.filter((c) => !c[0]).map((c) => c[1]);
     $("gWin").hidden = false;
     $("gWin").className = "gwin " + (fails.length ? "no" : "yes");
@@ -756,7 +761,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const st = (k, v, sub, cls = "") => `<div class="gstat ${cls}"><span class="k">${k}</span><span class="v">${v}</span><span class="s">${sub}</span></div>`;
     $("gStats").innerHTML =
       st("Competition", fmt(n), comp.w + " · Etsy listings", comp.c) +
-      st("Avg. views", fmt(s.meanViews), vw.w + " · per listing", vw.c) +
+      st("Avg. views", (s.meanDailyViews < 10 ? s.meanDailyViews.toFixed(1) : fmt(s.meanDailyViews)) + "/day", vw.w + " · per listing, age-adjusted", vw.c) +
       st("Avg. price", usd.length ? "$" + avgP.toFixed(2) : "–", usd.length ? "median $" + median(usd).toFixed(2) + " · USD" : "") +
       st("Favorites %", (s.favRate * 100).toFixed(1) + "%", "favorites per view") +
       st("KD", s.kd + "/100", kdB.w + " to rank", kdB.c) +
