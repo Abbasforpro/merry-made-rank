@@ -1,7 +1,7 @@
 // Merry Made Rank connector: a free Cloudflare Worker that passes the page's
 // requests on to Etsy's Open API (Etsy doesn't allow browsers to call it
-// directly), and, once set up, reads Google search volume from the free
-// Google Ads API.
+// directly), reads Google Trends interest (no key needed), and, once set up,
+// reads Google search volume from the free Google Ads API.
 //
 // Secrets (Settings > Variables and Secrets, type Secret):
 //   ETSY_KEY             keystring:shared_secret
@@ -47,7 +47,24 @@ export default {
 
     const url = new URL(request.url);
 
-    if (url.pathname === "/version") return json({ version: 4, google: !!env.GADS_REFRESH_TOKEN });
+    if (url.pathname === "/version") return json({ version: 5, google: !!env.GADS_REFRESH_TOKEN, trends: true });
+
+    // Google Trends, last 12 months, 0-100 relative interest. No key needed.
+    if (url.pathname === "/trends") {
+      const kw = (url.searchParams.get("kw") || "").trim().toLowerCase().slice(0, 80);
+      if (!kw) return json({ error: "Missing keyword" }, 400);
+      // Cache each keyword for 7 days, same as /google.
+      const cacheKey = new Request("https://cache.merry-made-rank/trends?kw=" + encodeURIComponent(kw));
+      const cached = await caches.default.match(cacheKey);
+      if (cached) return json(await cached.json());
+      try {
+        const data = await googleTrends(kw);
+        ctx.waitUntil(caches.default.put(cacheKey, new Response(JSON.stringify(data), { headers: { "Cache-Control": "max-age=604800" } })));
+        return json(data);
+      } catch (e) {
+        return json({ error: String(e.message || e).slice(0, 300) }, 502);
+      }
+    }
 
     if (url.pathname === "/google") {
       const kw = (url.searchParams.get("kw") || "").trim().toLowerCase().slice(0, 80);
@@ -143,4 +160,58 @@ async function googleVolume(env, kw) {
   }
   countries.sort((a, b) => b.v - a.v);
   return { kw, volume: Number(world.avgMonthlySearches || 0), competition: world.competition || null, months, countries: countries.slice(0, 4) };
+}
+
+// Google Trends' own web endpoints. Step 1 (explore) hands back a signed request
+// for the time-series widget; step 2 (multiline) returns weekly 0-100 values.
+const TRENDS = "https://trends.google.com/trends";
+const TRENDS_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
+
+// Trends replies start with ")]}'," to stop JSON hijacking; drop everything before the JSON.
+function trendsJson(text) {
+  const i = text.indexOf("{");
+  if (i < 0) throw new Error("Google Trends sent an unexpected reply");
+  return JSON.parse(text.slice(i));
+}
+
+async function trendsGet(url, cookie) {
+  const headers = { "User-Agent": TRENDS_UA, "Accept-Language": "en-US,en;q=0.9" };
+  if (cookie) headers.Cookie = cookie;
+  const res = await fetch(url, { headers });
+  if (res.status === 429) throw new Error("Google Trends is rate limiting right now. Try again in a few minutes.");
+  if (!res.ok) throw new Error("Google Trends error " + res.status);
+  return trendsJson(await res.text());
+}
+
+async function googleTrends(kw) {
+  // Trends often answers 429 without its NID cookie, so pick one up first.
+  let cookie = "";
+  try {
+    const home = await fetch(TRENDS + "/?geo=US", { headers: { "User-Agent": TRENDS_UA } });
+    const set = home.headers.get("Set-Cookie") || "";
+    const nid = set.match(/NID=[^;]+/);
+    if (nid) cookie = nid[0];
+  } catch (e) { /* carry on without the cookie */ }
+
+  const req = { comparisonItem: [{ keyword: kw, geo: "", time: "today 12-m" }], category: 0, property: "" };
+  const explore = await trendsGet(`${TRENDS}/api/explore?hl=en-US&tz=0&req=${encodeURIComponent(JSON.stringify(req))}`, cookie);
+  const widget = (explore.widgets || []).find((w) => w.id === "TIMESERIES");
+  if (!widget) throw new Error("Google Trends has no time series for this keyword");
+  // The widget's token signs its request; multiline rejects the request without it.
+  const multi = await trendsGet(`${TRENDS}/api/widgetdata/multiline?hl=en-US&tz=0&req=${encodeURIComponent(JSON.stringify(widget.request))}&token=${encodeURIComponent(widget.token || "")}`, cookie);
+  const weeks = (multi.default && multi.default.timelineData) || [];
+  if (!weeks.length) return { kw, months: [] };
+
+  // Average the weekly points into calendar months, then keep the last 12.
+  const byMonth = new Map();
+  for (const w of weeks) {
+    const d = new Date(Number(w.time) * 1000);
+    const k = d.getUTCFullYear() * 12 + d.getUTCMonth();
+    const v = Number((w.value || [])[0] || 0);
+    const b = byMonth.get(k) || { sum: 0, n: 0 };
+    b.sum += v; b.n += 1; byMonth.set(k, b);
+  }
+  const months = [...byMonth.entries()].sort((a, b) => a[0] - b[0]).slice(-12)
+    .map(([k, b]) => ({ y: Math.floor(k / 12), m: k % 12, v: Math.round(b.sum / b.n) }));
+  return { kw, months };
 }
