@@ -188,7 +188,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
         <div id="gTrend" class="gtrend"></div>
       </div>
       <div class="box">
-        <h2>Most searched in</h2>
+        <div class="row" style="justify-content:space-between"><h2>Most searched in</h2><span class="note">Google Trends · relative interest</span></div>
         <div id="gCountries" class="gcountries"></div>
       </div>
     </div>
@@ -675,16 +675,10 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
   /* ---------- gallery ---------- */
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   let gRun = 0, gDone = false;
-  function exampleGoogle(kw) {
-    const r = rng(kw.length * 31 + 7), now = new Date(), months = [];
-    for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - 1 - i, 1); months.push({ y: d.getFullYear(), m: d.getMonth(), v: Math.round(1500 + r() * 2200) }); }
-    return { example: true, volume: Math.round(months.reduce((a, b) => a + b.v, 0) / 12), months,
-      countries: [{ code: "US", name: "United States", v: 1900 }, { code: "GB", name: "United Kingdom", v: 210 }, { code: "CA", name: "Canada", v: 170 }, { code: "AU", name: "Australia", v: 140 }] };
-  }
   function exampleTrends(kw) {
     const r = rng(kw.length * 53 + 11), now = new Date(), months = [];
     for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ y: d.getFullYear(), m: d.getMonth(), v: Math.round(40 + r() * 60) }); }
-    return { example: true, kw, months };
+    return { example: true, kw, months, countries: [{ code: "US", name: "United States", v: 100 }, { code: "GB", name: "United Kingdom", v: 64 }, { code: "CA", name: "Canada", v: 58 }, { code: "AU", name: "Australia", v: 51 }, { code: "IE", name: "Ireland", v: 37 }] };
   }
   // Google Trends through the connector: 12 monthly points of 0-100 relative interest, no key needed.
   async function trendsData(kw) {
@@ -695,19 +689,6 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       if (r.status === 404) return { error: "Update the connector code in Cloudflare to turn this on (see Setup)." };
       const j = await r.json();
       return j.error ? { error: j.error } : j;
-    } catch (e) { return { error: "Couldn't reach the connector." }; }
-  }
-  async function googleData(kw, example) {
-    if (example) return exampleGoogle(kw);
-    const proxy = getProxy();
-    if (!proxy) return { error: "Needs the connector (see Setup)." };
-    try {
-      const r = await fetch(proxy + "/google?kw=" + encodeURIComponent(kw));
-      if (r.status === 404) return { error: "Update the connector code in Cloudflare to turn this on (see Setup)." };
-      const j = await r.json();
-      if (j.error === "NOT_SET_UP") return { error: "Waiting for Google Ads setup (see Setup). Free, one time." };
-      if (j.error) return { error: j.error };
-      return j;
     } catch (e) { return { error: "Couldn't reach the connector." }; }
   }
   // Free fallback until Google Ads data is available: open the keyword in Google Trends.
@@ -739,18 +720,16 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const el = $("gCountries");
     if (g.error) { el.innerHTML = `<div class="gempty">${trendsLink("top countries", "today 12-m")}</div>`; return; }
     const C = (g.countries || []).filter((c) => c.v > 0);
-    if (!C.length) { el.innerHTML = '<div class="gempty">Not enough Google searches to rank countries.</div>'; return; }
-    const total = C.reduce((a, c) => a + c.v, 0), mx = C[0].v;
-    el.innerHTML = C.map((c) => `<div class="gcountry"><div class="top"><span><span class="code">${esc(c.code)}</span>${esc(c.name)}</span><b>${fmt(c.v)}/mo · ${Math.round(c.v / total * 100)}%</b></div><div class="meter"><i style="width:${c.v / mx * 100}%"></i></div></div>`).join("") +
-      `<p class="note">Monthly Google searches per country${g.example ? " (example)" : ""}. Share is among these four.</p>`;
+    if (!C.length) { el.innerHTML = `<div class="gempty">${trendsLink("top countries", "today 12-m")}</div>`; return; }
+    el.innerHTML = C.map((c) => `<div class="gcountry"><div class="top"><span><span class="code">${esc(c.code)}</span>${esc(c.name)}</span><b>${c.v}/100</b></div><div class="meter"><i style="width:${c.v}%"></i></div></div>`).join("") +
+      `<p class="note">Google Trends relative interest by country, last 12 months${g.example ? " (example)" : ""}. 100 is the country where the keyword is most popular.</p>`;
   }
   async function gallery(kw) {
     kw = norm(kw); if (!kw) return;
     const run = ++gRun; gDone = true;
     $("gInput").value = kw; $("kwInput").value = kw;
     $("gGo").disabled = true; $("gGo").textContent = "Analyzing…";
-    $("gTrend").innerHTML = '<p class="note">Loading Google Trends…</p>';
-    $("gCountries").innerHTML = '<p class="note">Loading Google data…</p>';
+    $("gTrend").innerHTML = $("gCountries").innerHTML = '<p class="note">Loading Google Trends…</p>';
     // Clear the previous keyword's cards so they never sit on screen under the new keyword.
     $("gWin").hidden = true;
     $("gStats").innerHTML = '<p class="note">Loading Etsy data…</p>';
@@ -796,11 +775,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     }).join("");
     const t = example ? exampleTrends(kw) : await trendsP;
     if (run !== gRun) return;
-    drawTrend(t);
-    // Countries still come from the Google Ads API (/google) for anyone who has it set up.
-    const g = await googleData(kw, example);
-    if (run !== gRun) return;
-    drawCountries(g);
+    drawTrend(t); drawCountries(t);
   }
   $("gForm").addEventListener("submit", (e) => { e.preventDefault(); gallery($("gInput").value); });
 

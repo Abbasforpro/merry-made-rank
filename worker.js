@@ -49,12 +49,12 @@ export default {
 
     if (url.pathname === "/version") return json({ version: 5, google: !!env.GADS_REFRESH_TOKEN, trends: true });
 
-    // Google Trends, last 12 months, 0-100 relative interest. No key needed.
+    // Google Trends, last 12 months, 0-100 relative interest, plus top countries. No key needed.
     if (url.pathname === "/trends") {
       const kw = (url.searchParams.get("kw") || "").trim().toLowerCase().slice(0, 80);
       if (!kw) return json({ error: "Missing keyword" }, 400);
-      // Cache each keyword for 7 days, same as /google.
-      const cacheKey = new Request("https://cache.merry-made-rank/trends?kw=" + encodeURIComponent(kw));
+      // Cache each keyword for 7 days, same as /google. v2 key: entries cached before countries were added lack them.
+      const cacheKey = new Request("https://cache.merry-made-rank/trends2?kw=" + encodeURIComponent(kw));
       const cached = await caches.default.match(cacheKey);
       if (cached) return json(await cached.json());
       try {
@@ -200,7 +200,8 @@ async function googleTrends(kw) {
   // The widget's token signs its request; multiline rejects the request without it.
   const multi = await trendsGet(`${TRENDS}/api/widgetdata/multiline?hl=en-US&tz=0&req=${encodeURIComponent(JSON.stringify(widget.request))}&token=${encodeURIComponent(widget.token || "")}`, cookie);
   const weeks = (multi.default && multi.default.timelineData) || [];
-  if (!weeks.length) return { kw, months: [] };
+  const countries = await trendsCountries(explore, cookie);
+  if (!weeks.length) return { kw, months: [], countries };
 
   // Average the weekly points into calendar months, then keep the last 12.
   const byMonth = new Map();
@@ -213,5 +214,18 @@ async function googleTrends(kw) {
   }
   const months = [...byMonth.entries()].sort((a, b) => a[0] - b[0]).slice(-12)
     .map(([k, b]) => ({ y: Math.floor(k / 12), m: k % 12, v: Math.round(b.sum / b.n) }));
-  return { kw, months };
+  return { kw, months, countries };
+}
+
+// Top 5 countries by relative interest (0-100, top country = 100). A failure here
+// leaves countries empty rather than failing the whole /trends reply.
+async function trendsCountries(explore, cookie) {
+  try {
+    const widget = (explore.widgets || []).find((w) => w.id === "GEO_MAP");
+    if (!widget) return [];
+    const geo = await trendsGet(`${TRENDS}/api/widgetdata/comparedgeo?hl=en-US&tz=0&req=${encodeURIComponent(JSON.stringify(widget.request))}&token=${encodeURIComponent(widget.token || "")}`, cookie);
+    return ((geo.default && geo.default.geoMapData) || [])
+      .map((g) => ({ code: g.geoCode, name: g.geoName, v: Number((g.value || [])[0] || 0) }))
+      .sort((a, b) => b.v - a.v).slice(0, 5);
+  } catch (e) { return []; }
 }
