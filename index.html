@@ -100,6 +100,11 @@ a.btn { text-decoration: none; display: inline-block; }
 td button.linkish { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-align: left; text-decoration: underline; }
 .trends { min-height: 120px; min-width: 0; overflow: hidden; }
 .trends iframe { width: 100% !important; }
+.rk-up { color: var(--good); font-weight: 700; } .rk-down { color: var(--bad); font-weight: 700; } .rk-flat { color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.spark { width: 96px; height: 24px; display: block; }
+.spark path { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.rk-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 34ch; }
 .btn:disabled { opacity: 0.55; cursor: wait; }
 .note { font-size: 0.86rem; color: var(--muted); margin: 0; max-width: 75ch; }
 .banner { border: 1px dashed var(--mark); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; color: var(--ink); background: color-mix(in srgb, var(--mark) 10%, var(--card)); }
@@ -163,6 +168,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     <button role="tab" id="tab-audit" aria-selected="false" data-tab="audit">Tag optimizer &amp; audit</button>
     <button role="tab" id="tab-builder" aria-selected="false" data-tab="builder">Title &amp; tag builder</button>
     <button role="tab" id="tab-fees" aria-selected="false" data-tab="fees">Fee &amp; profit</button>
+    <button role="tab" id="tab-ranks" aria-selected="false" data-tab="ranks">Rank tracker</button>
     <button role="tab" id="tab-setup" aria-selected="false" data-tab="setup">Setup</button>
   </nav>
 
@@ -399,6 +405,63 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
   </section>
 
   <!-- SETUP -->
+  <!-- RANK TRACKER -->
+  <section class="panel" data-panel="ranks" hidden>
+    <div class="box">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <h2>Where our listings rank</h2>
+        <span class="note" id="rkUpdated"></span>
+      </div>
+      <p class="note">Each listing is checked once a day on its focus keywords. Positions follow Etsy's search API relevance order, which is close to Etsy search but leaves out ads and personal results. Page 1 means positions 1 to 48.</p>
+      <div class="row">
+        <a class="btn ghost" href="https://github.com/Abbasforpro/merry-made-rank/actions/workflows/rank-check.yml" target="_blank" rel="noopener">Run a check now</a>
+        <a class="btn ghost" href="data/rank-history.csv" download>Download history (CSV)</a>
+        <a class="btn ghost" href="https://github.com/Abbasforpro/merry-made-rank/edit/main/data/rank-keywords.json" target="_blank" rel="noopener">Edit keywords</a>
+      </div>
+      <div id="rkBanner" class="banner" hidden></div>
+    </div>
+
+    <div class="gstats" id="rkStats"></div>
+
+    <div class="box">
+      <div class="row" style="justify-content:space-between;align-items:baseline"><h2>Listings ranked over time</h2><span class="note">Listings counted at their best keyword</span></div>
+      <div id="rkChart" class="gtrend"></div>
+    </div>
+
+    <div class="box">
+      <div class="row" style="justify-content:space-between;align-items:baseline"><h2 id="rkTableTitle">All listings</h2><span class="note" id="rkShown"></span></div>
+      <div class="chips" id="rkFilters" role="group" aria-label="Filter"></div>
+      <div class="row">
+        <label class="grow">Search title or keyword<input id="rkSearch" autocomplete="off" placeholder="e.g. welcome sign"></label>
+        <label style="flex:0 1 220px">Sort by
+          <select id="rkSort">
+            <option value="pos">Best position first</option>
+            <option value="up">Biggest climbers</option>
+            <option value="down">Biggest drops</option>
+            <option value="comp">Least competition</option>
+            <option value="title">Title A to Z</option>
+          </select>
+        </label>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Listing</th><th>Keyword</th><th class="n">Position</th><th class="n">Change</th><th class="n">Best</th><th class="n">Competition</th><th>Last checks</th></tr></thead>
+          <tbody id="rkBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box">
+      <h2>Check one keyword now</h2>
+      <p class="note">Searches the top 300 results live and lists every one of our listings it finds. Uses 3 Etsy requests and doesn't change the saved history.</p>
+      <form class="row" id="rkForm">
+        <label class="grow">Keyword<input id="rkKw" autocomplete="off" placeholder="spooky one welcome sign"></label>
+        <button class="btn" id="rkGo" type="submit">Find our listings</button>
+      </form>
+      <div id="rkLive"></div>
+    </div>
+  </section>
+
   <section class="panel" data-panel="setup" hidden>
     <div class="box">
       <h2>Connect free live data</h2>
@@ -1060,10 +1123,208 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     function fallback() { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } catch (e) {} ta.remove(); }
   }
 
+  /* ---------- rank tracker ---------- */
+  // Daily history saved by scripts/check-ranks.mjs: one row per listing, keyword and day.
+  const PAGE1 = 48;
+  const rk = { rows: [], listings: new Map(), depth: 300, shopId: null, dates: [], items: [], filter: "all", loaded: false };
+  function parseCsv(text) {
+    const out = [];
+    for (const line of text.split(/\r?\n/)) {
+      if (!line) continue;
+      const cells = []; let cur = "", q = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (q) { if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+        else if (c === '"') q = true; else if (c === ",") { cells.push(cur); cur = ""; } else cur += c;
+      }
+      cells.push(cur); out.push(cells);
+    }
+    return out;
+  }
+  const rkDay = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  const rkBucket = (p) => p == null ? "none" : p <= PAGE1 ? "p1" : p <= 100 ? "t100" : "deep";
+  const rkPage = (p) => p == null ? "" : `page ${Math.ceil(p / PAGE1)}`;
+
+  async function loadRanks() {
+    rk.loaded = true;
+    try {
+      const [h, l] = await Promise.all([fetch("data/rank-history.csv", { cache: "no-store" }), fetch("data/rank-listings.json", { cache: "no-store" })]);
+      if (!h.ok || !l.ok) throw new Error("NODATA");
+      const meta = await l.json();
+      rk.depth = meta.depth || 300; rk.shopId = meta.shop_id;
+      // Etsy sends titles HTML-escaped (&#39;, &amp;); turn them back into plain text.
+      const unescape = (t) => { const ta = document.createElement("textarea"); ta.innerHTML = t; return ta.value; };
+      meta.listings.forEach((x) => rk.listings.set(String(x.id), { ...x, title: unescape(x.title) }));
+      rk.rows = parseCsv(await h.text()).slice(1).map(([date, id, kw, pos, comp]) => ({ date, id, kw, pos: pos === "" ? null : Number(pos), comp: Number(comp) || 0 }));
+      $("rkUpdated").textContent = "Last checked " + new Date(meta.updated).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+      buildRanks();
+    } catch (e) {
+      const b = $("rkBanner"); b.hidden = false;
+      b.textContent = location.protocol === "file:" || /claude|usercontent/.test(location.host)
+        ? "The saved rank history loads on the live site, abbasforpro.github.io/merry-made-rank."
+        : "No rank check has run yet. Tap Run a check now, then Run workflow, and come back in about 10 minutes.";
+    }
+  }
+
+  function buildRanks() {
+    rk.dates = [...new Set(rk.rows.map((r) => r.date))].sort();
+    const last = rk.dates[rk.dates.length - 1], prev = rk.dates[rk.dates.length - 2];
+    const series = new Map(); // listing|keyword -> {date: pos}
+    for (const r of rk.rows) {
+      const k = r.id + "|" + r.kw;
+      if (!series.has(k)) series.set(k, { id: r.id, kw: r.kw, by: {}, comp: 0 });
+      const s = series.get(k); s.by[r.date] = r.pos; if (r.date === last) s.comp = r.comp;
+    }
+    // Only listings and keywords in the latest check; older keywords stay in the CSV.
+    rk.items = [...series.values()].filter((s) => last in s.by && rk.listings.has(s.id)).map((s) => {
+      const pos = s.by[last], before = prev && prev in s.by ? s.by[prev] : undefined;
+      const seen = Object.values(s.by).filter((p) => p != null);
+      // Not found counts as one past the depth checked, so dropping out reads as a fall.
+      const deep = rk.depth + 1;
+      const change = before === undefined ? null : (before ?? deep) - (pos ?? deep);
+      return { ...s, title: rk.listings.get(s.id).title, url: rk.listings.get(s.id).url, pos, before, change, best: seen.length ? Math.min(...seen) : null };
+    });
+    renderRankStats(last, prev);
+    renderRankChart();
+    renderRankFilters();
+    renderRankTable();
+  }
+
+  // Each listing counts once, at its best-placed keyword.
+  function bestByListing(date) {
+    const best = new Map();
+    for (const r of rk.rows) {
+      if (r.date !== date) continue;
+      const cur = best.get(r.id);
+      if (!best.has(r.id) || (r.pos != null && (cur == null || r.pos < cur))) best.set(r.id, r.pos);
+    }
+    return [...best.values()];
+  }
+  function rankCounts(date) {
+    const b = bestByListing(date);
+    return { total: b.length, p1: b.filter((p) => p != null && p <= PAGE1).length, t100: b.filter((p) => p != null && p <= 100).length, found: b.filter((p) => p != null).length };
+  }
+
+  function renderRankStats(last, prev) {
+    const c = rankCounts(last), p = prev ? rankCounts(prev) : null;
+    const delta = (k) => { if (!p) return "first check"; const d = c[k] - p[k]; return (d > 0 ? "+" + d : d === 0 ? "no change" : String(d)) + " since " + rkDay(prev); };
+    const up = rk.items.filter((i) => i.change > 0).length, down = rk.items.filter((i) => i.change < 0).length;
+    const tile = (k, v, s, cls = "") => `<div class="gstat ${cls}"><span class="k">${k}</span><span class="v">${v}</span><span class="s">${esc(s)}</span></div>`;
+    $("rkStats").innerHTML =
+      tile("On page 1", c.p1, delta("p1"), "c-green") +
+      tile("In top 100", c.t100, delta("t100"), "c-blue") +
+      tile(`In top ${rk.depth}`, c.found, delta("found")) +
+      tile(`Not in top ${rk.depth}`, c.total - c.found, `of ${c.total} listings`, c.total - c.found ? "c-red" : "") +
+      tile("Moved up", up, prev ? "keywords since " + rkDay(prev) : "after the next check") +
+      tile("Moved down", down, prev ? "keywords since " + rkDay(prev) : "after the next check");
+  }
+
+  function renderRankChart() {
+    const D = rk.dates.slice(-60), el = $("rkChart");
+    const pts = D.map((d) => ({ d, ...rankCounts(d) }));
+    const W = 1000, H = 260, pl = 40, pr = 40, pt = 16, pb = 30;
+    const top = Math.max(10, ...pts.map((p) => p.found));
+    const x = (i) => pl + (W - pl - pr) * (D.length === 1 ? 0.5 : i / (D.length - 1));
+    const y = (v) => pt + (H - pt - pb) * (1 - v / top);
+    const lines = [["found", `Top ${rk.depth}`, "var(--muted)"], ["t100", "Top 100", "var(--mark)"], ["p1", "Page 1", "var(--accent)"]];
+    const grid = [0, 0.5, 1].map((f) => { const v = Math.round(top * f); return `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"></line><text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end" font-size="13" fill="var(--muted)">${v}</text>`; }).join("");
+    const step = Math.max(1, Math.ceil(D.length / 8));
+    const labels = D.map((d, i) => i % step && i !== D.length - 1 ? "" : `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="13" fill="var(--muted)">${rkDay(d)}</text>`).join("");
+    const paths = lines.map(([k, name, col]) => `<polyline points="${pts.map((p, i) => `${x(i).toFixed(1)},${y(p[k]).toFixed(1)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round"></polyline>` +
+      pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p[k])}" r="4" fill="${col}"><title>${rkDay(p.d)}: ${p[k]} listings ${name.toLowerCase()}</title></circle>`).join("")).join("");
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Listings on page 1, in the top 100 and in the top ${rk.depth}, by day">${grid}${paths}${labels}</svg>
+      <div class="chips">${lines.slice().reverse().map(([, name, col]) => `<span class="note"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${col};margin-right:6px"></span>${name}</span>`).join("")}</div>`;
+  }
+
+  const RK_FILTERS = [["all", "All"], ["p1", "Page 1"], ["t100", "Top 100"], ["deep", "101 and below"], ["none", "Not found"], ["up", "Moved up"], ["down", "Moved down"]];
+  function rkMatch(i, f) {
+    if (f === "all") return true;
+    if (f === "up") return i.change > 0;
+    if (f === "down") return i.change < 0;
+    if (f === "t100") return i.pos != null && i.pos <= 100;
+    return rkBucket(i.pos) === f;
+  }
+  function renderRankFilters() {
+    $("rkFilters").innerHTML = RK_FILTERS.map(([k, name]) => `<button type="button" class="chip" data-f="${k}" aria-pressed="${rk.filter === k}">${name}<b>${rk.items.filter((i) => rkMatch(i, k)).length}</b></button>`).join("");
+  }
+  function sparkline(s) {
+    const D = rk.dates.slice(-14).filter((d) => d in s.by);
+    if (D.length < 2) return '<span class="note">—</span>';
+    const deep = rk.depth + 1, W = 96, H = 24;
+    const pts = D.map((d, i) => `${(i / (D.length - 1) * (W - 4) + 2).toFixed(1)},${(2 + (H - 4) * ((s.by[d] ?? deep) - 1) / (deep - 1)).toFixed(1)}`);
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="M${pts.join(" L")}"></path></svg>`;
+  }
+  function renderRankTable() {
+    const q = norm($("rkSearch").value || "");
+    const sort = $("rkSort").value;
+    const deep = rk.depth + 1;
+    const list = rk.items.filter((i) => rkMatch(i, rk.filter) && (!q || norm(i.title).includes(q) || i.kw.includes(q)));
+    const by = {
+      pos: (a, b) => (a.pos ?? deep) - (b.pos ?? deep) || a.comp - b.comp,
+      up: (a, b) => (b.change ?? -1e9) - (a.change ?? -1e9),
+      down: (a, b) => (a.change ?? 1e9) - (b.change ?? 1e9),
+      comp: (a, b) => a.comp - b.comp,
+      title: (a, b) => a.title.localeCompare(b.title),
+    }[sort];
+    list.sort(by);
+    $("rkTableTitle").textContent = rk.filter === "all" ? "All listings" : RK_FILTERS.find((f) => f[0] === rk.filter)[1];
+    $("rkShown").textContent = `${list.length} keyword${list.length === 1 ? "" : "s"} shown`;
+    const change = (i) => {
+      if (i.change == null) return '<span class="rk-flat">new</span>';
+      if (i.change === 0) return '<span class="rk-flat">–</span>';
+      if (i.before == null) return '<span class="rk-up">▲ new</span>';
+      if (i.pos == null) return '<span class="rk-down">dropped out</span>';
+      return i.change > 0 ? `<span class="rk-up">▲ ${i.change}</span>` : `<span class="rk-down">▼ ${-i.change}</span>`;
+    };
+    const pos = (p) => p == null ? `<span class="rk-flat">not in top ${rk.depth}</span>` : `<b>#${p}</b> <span class="note">${rkPage(p)}</span>`;
+    const search = (kw) => "https://www.etsy.com/search?q=" + encodeURIComponent(kw);
+    $("rkBody").innerHTML = list.map((i) => `<tr>
+      <td><a class="rk-title" href="${esc(i.url)}" target="_blank" rel="noopener" title="${esc(i.title)}">${esc(i.title)}</a></td>
+      <td><a href="${search(i.kw)}" target="_blank" rel="noopener">${esc(i.kw)}</a></td>
+      <td class="n">${pos(i.pos)}</td>
+      <td class="n">${change(i)}</td>
+      <td class="n">${i.best == null ? "—" : "#" + i.best}</td>
+      <td class="n">${fmt(i.comp)}</td>
+      <td>${sparkline(i)}</td></tr>`).join("") || `<tr><td colspan="7" class="note">No listings match.</td></tr>`;
+  }
+  $("rkFilters").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-f]"); if (!b) return;
+    rk.filter = b.dataset.f; renderRankFilters(); renderRankTable();
+  });
+  $("rkSearch").addEventListener("input", renderRankTable);
+  $("rkSort").addEventListener("change", renderRankTable);
+
+  // Live check of one keyword: where do any of our listings sit in the top results right now?
+  $("rkForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const kw = norm($("rkKw").value || ""), out = $("rkLive"), btn = $("rkGo");
+    if (!kw) return;
+    btn.disabled = true; out.innerHTML = '<p class="note">Searching Etsy…</p>';
+    try {
+      if (!rk.shopId) {
+        const s = await etsy("/shops?shop_name=MerryMadePaper");
+        rk.shopId = s.results && s.results[0] && s.results[0].shop_id;
+      }
+      const hits = []; let count = 0;
+      for (let offset = 0; offset < 300; offset += 100) {
+        const d = await etsy(`/listings/active?limit=100&offset=${offset}&sort_on=score&keywords=${encodeURIComponent(kw)}`);
+        if (!offset) count = d.count || 0;
+        (d.results || []).forEach((r, i) => { if (r.shop_id === rk.shopId) hits.push({ pos: offset + i + 1, title: r.title, url: r.url }); });
+        if (offset + 100 >= count) break;
+      }
+      out.innerHTML = `<p class="note">${fmt(count)} listings compete for “${esc(kw)}”.</p>` + (hits.length
+        ? `<ol class="glist">${hits.map((h) => `<li><b>#${h.pos}</b> <span class="note">${rkPage(h.pos)}</span> · <a href="${esc(h.url)}" target="_blank" rel="noopener">${esc(h.title)}</a></li>`).join("")}</ol>`
+        : `<div class="gempty">None of our listings are in the top 300 for this keyword.</div>`);
+    } catch (err) {
+      out.innerHTML = `<p class="err">${esc(err.message === "NOKEY" || err.message === "PROXYFAIL" || err.message === "BLOCKED" ? "Couldn't reach Etsy. Check the connector in Setup." : err.message)}</p>`;
+    } finally { btn.disabled = false; }
+  });
+
   let researchDone = false;
   window.__onTab = (name) => {
     if (name === "research" && !researchDone) { researchDone = true; research($("gInput").value || $("kwInput").value); }
     if (name === "gallery" && !gDone) gallery($("gInput").value);
+    if (name === "ranks" && !rk.loaded) loadRanks();
   };
   build(); fees();
   window.__onTab(startTab && document.querySelector(`[data-panel="${startTab}"]`) ? startTab : "gallery");
