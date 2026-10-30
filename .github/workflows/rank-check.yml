@@ -4,8 +4,6 @@ on:
   schedule:
     - cron: "0 4 * * *" # 9:00 AM Pakistan time
   workflow_dispatch: {}
-  push:
-    branches: [claude/rank-tracker] # first run before merge; removed afterwards
 
 permissions:
   contents: write

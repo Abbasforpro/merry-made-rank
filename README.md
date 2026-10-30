@@ -12,4 +12,4 @@ The Rank tracker tab shows where each of the shop's active listings ranks in Ets
 
 - `scripts/check-ranks.mjs` does the check. It reads the keywords in `data/rank-keywords.json` (a listing missing there is tracked on the start of its title), searches the top 300 results for each keyword through the Cloudflare connector, and appends the day's positions to `data/rank-history.csv`.
 - `.github/workflows/rank-check.yml` runs it every day at 9:00 AM Pakistan time and commits the results. Run it any time from the Actions tab with Run workflow.
-- Positions follow the Etsy API's relevance order (`sort_on=score`). It's close to Etsy search but leaves out ads and personal results.
+- Positions follow the Etsy API's relevance order (`sort_on=score`). It mostly reflects how well a listing's text matches the keyword, so it reads higher than the shopper-facing search, which also weighs clicks, favorites and sales and mixes in ads.
