@@ -818,7 +818,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const kdB = band(s.kd, [(v) => v <= 50, (v) => v <= 65, (v) => v <= 80, () => true], ["Easy", "Fair", "Medium", "Hard"]);
     const vw = band(s.meanDailyViews, [(v) => v >= 10, (v) => v >= 3, (v) => v >= 1, () => true], ["High demand", "Good demand", "Some demand", "Low demand"]);
     // Winner rules set by the user: competition under 10k, views 1,000+, price over $2, favorites over 1%.
-    const checks = [[n < 10000, "competition under 10k"], [s.meanDailyViews >= 3, "views 3+/day"], [usd.length && avgP > 2, "price over $2"], [s.favRate > 0.01, "favorites over 1%"]];
+    const checks = [[n < 10000, "competition under 10k"], [s.meanDailyViews >= 3, "views 90+/month"], [usd.length && avgP > 2, "price over $2"], [s.favRate > 0.01, "favorites over 1%"]];
     const fails = checks.filter((c) => !c[0]).map((c) => c[1]);
     $("gWin").hidden = false;
     $("gWin").className = "gwin " + (fails.length ? "no" : "yes");
@@ -826,9 +826,8 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     const st = (k, v, sub, cls = "") => `<div class="gstat ${cls}"><span class="k">${k}</span><span class="v">${v}</span><span class="s">${sub}</span></div>`;
     $("gStats").innerHTML =
       st("Competition", fmt(n), comp.w + " · Etsy listings", comp.c) +
-      st("Avg. views", (s.meanDailyViews < 10 ? s.meanDailyViews.toFixed(1) : fmt(s.meanDailyViews)) + "/day", vw.w + " · per listing, age-adjusted", vw.c) +
-      // Same age-adjusted average, as a month (30.4 days) per listing across the top 100 results.
-      st("Avg. views / month", fmt(s.meanDailyViews * 30.4), `per listing · top ${L.length} results`, vw.c) +
+      // Age-adjusted average views per listing across the top 100 results, as a month (30.4 days).
+      st("Avg. views / month", fmt(s.meanDailyViews * 30.4), `${vw.w} · per listing · top ${L.length} results`, vw.c) +
       st("Avg. price", usd.length ? "$" + avgP.toFixed(2) : "–", usd.length ? "median $" + median(usd).toFixed(2) + " · USD" : "") +
       st("Favorites %", (s.favRate * 100).toFixed(1) + "%", "favorites per view") +
       st("KD", s.kd + "/100", kdB.w + " to rank", kdB.c);
