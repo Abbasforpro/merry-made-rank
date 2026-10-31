@@ -75,11 +75,12 @@ async function main() {
   // keyword -> listing ids tracked on it, so a keyword shared by two listings is searched once.
   const byKeyword = new Map();
   for (const l of listings) {
-    const kws = set.get(String(l.listing_id))?.length ? set.get(String(l.listing_id)) : [leadPhrase(l.title)];
-    for (const kw of kws) {
-      const k = kw.trim().toLowerCase();
-      if (!byKeyword.has(k)) byKeyword.set(k, []);
-      byKeyword.get(k).push(String(l.listing_id));
+    // The listed keywords plus the current start of the title, so a retitled listing
+    // is tracked on its new lead phrase without editing rank-keywords.json.
+    const kws = [...(set.get(String(l.listing_id)) || []), leadPhrase(l.title)];
+    for (const kw of new Set(kws.map((k) => k.trim().toLowerCase()))) {
+      if (!byKeyword.has(kw)) byKeyword.set(kw, []);
+      byKeyword.get(kw).push(String(l.listing_id));
     }
   }
 
@@ -113,7 +114,7 @@ async function main() {
 
   await writeFile(new URL("rank-listings.json", DATA), JSON.stringify({
     updated: new Date().toISOString(), shop: SHOP_NAME, shop_id: shop.shop_id, depth: DEPTH,
-    listings: listings.map((l) => ({ id: String(l.listing_id), title: unescape(l.title), url: `https://www.etsy.com/listing/${l.listing_id}` })),
+    listings: listings.map((l) => ({ id: String(l.listing_id), title: unescape(l.title), url: `https://www.etsy.com/listing/${l.listing_id}`, views: l.views ?? null, favorites: l.num_favorers ?? null })),
   }, null, 1) + "\n");
 
   const pos = rows.map((r) => r[3]).filter((p) => p !== "");

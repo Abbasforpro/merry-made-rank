@@ -1,5 +1,5 @@
 {
- "_note": "One entry per listing. The first keyword is the main one. Add more keywords to any listing; listings missing here are tracked on the start of their title.",
+ "_note": "One entry per listing. The start of each listing's current title (up to the first comma) is always tracked too, so retitled listings need no edit here. Add extra keywords to any listing.",
  "listings": [
   {
    "listing_id": 4592751016,
