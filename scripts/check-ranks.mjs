@@ -114,7 +114,7 @@ async function main() {
 
   await writeFile(new URL("rank-listings.json", DATA), JSON.stringify({
     updated: new Date().toISOString(), shop: SHOP_NAME, shop_id: shop.shop_id, depth: DEPTH,
-    listings: listings.map((l) => ({ id: String(l.listing_id), title: unescape(l.title), url: `https://www.etsy.com/listing/${l.listing_id}` })),
+    listings: listings.map((l) => ({ id: String(l.listing_id), title: unescape(l.title), url: `https://www.etsy.com/listing/${l.listing_id}`, views: l.views ?? null, favorites: l.num_favorers ?? null })),
   }, null, 1) + "\n");
 
   const pos = rows.map((r) => r[3]).filter((p) => p !== "");
