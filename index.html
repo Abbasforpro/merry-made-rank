@@ -80,6 +80,15 @@ a.btn { text-decoration: none; display: inline-block; }
 .glist { margin: 0; padding-left: 28px; display: grid; gap: 8px; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
 .glist li { padding-left: 4px; overflow-wrap: anywhere; }
 .glist a { color: var(--accent); }
+#gTop { gap: 14px; }
+#gTop .gtagrow { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: flex-start; margin-top: 6px; }
+#gTop .gtags { display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 18rem; min-width: 0; }
+#gTop .gtag { font: 500 0.8rem/1.35 var(--body); color: var(--ink); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+#gTop .gcopy { padding: 3px 10px; font-size: 0.78rem; border-radius: 999px; margin-left: auto; }
+#gTop .gnotags { margin: 6px 0 0; font-size: 0.8rem; color: var(--muted); }
+@media (max-width: 640px) {
+  #gTop .gtags { flex-basis: 100%; }
+}
 .ggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
 .gcard { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; background: var(--paper); min-width: 0; }
 .gcard .ph { aspect-ratio: 4 / 3; max-width: 100%; background: var(--line); display: grid; place-items: center; color: var(--muted); font-size: 0.8rem; position: relative; }
@@ -201,6 +210,7 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
 
     <div class="box">
       <h2 id="gTopTitle">Top 10 listings</h2>
+      <p class="note" id="gTagNote" hidden></p>
       <ol class="glist" id="gTop"></ol>
     </div>
   </section>
@@ -787,6 +797,42 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     el.innerHTML = C.map((c) => `<div class="gcountry"><div class="top"><span><span class="code">${esc(c.code)}</span>${esc(c.name)}</span><b>${c.v}/100</b></div><div class="meter"><i style="width:${c.v}%"></i></div></div>`).join("") +
       `<p class="note">Google Trends relative interest by country, last 12 months${g.example ? " (example)" : ""}. 100 is the country where the keyword is most popular.</p>`;
   }
+  // One getListingsByListingIds request for every top listing that came back
+  // without a tags array. Listings that already have tags are left as they are.
+  async function ensureListingTags(listings) {
+    const missing = listings.filter((l) => !Array.isArray(l.tags) && l.listing_id != null);
+    const ids = [...new Set(missing.map((l) => l.listing_id))].filter((id) => /^\d+$/.test(String(id)));
+    if (!ids.length) return listings;
+    const batch = await etsy("/listings/batch?listing_ids=" + ids.join(","));
+    const byId = new Map(((batch && batch.results) || []).map((l) => [String(l.listing_id), l]));
+    return listings.map((l) => {
+      if (Array.isArray(l.tags)) return l;
+      const full = byId.get(String(l.listing_id));
+      const tags = full && Array.isArray(full.tags) ? full.tags : [];
+      return { ...l, tags };
+    });
+  }
+  // Etsy sends titles (and sometimes tags) with HTML entities such as &#39;.
+  function etsyText(s) {
+    return String(s).replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  }
+  function renderTopList(listings) {
+    $("gTop").innerHTML = listings.map((l) => {
+      const title = etsyText(l.title || "Untitled listing");
+      const name = esc(title);
+      const link = l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">${name}</a>` : name;
+      const tags = Array.isArray(l.tags) ? l.tags.map((t) => etsyText(t).trim()).filter(Boolean) : null;
+      let tagsHtml = "";
+      if (tags && !tags.length) tagsHtml = '<p class="gnotags">No tags</p>';
+      else if (tags && tags.length) {
+        const chips = tags.map((t) => `<span class="gtag">${esc(t)}</span>`).join("");
+        const payload = esc(tags.join(", "));
+        const label = esc("Copy tags for " + title.slice(0, 80));
+        tagsHtml = `<div class="gtagrow"><div class="gtags">${chips}</div><button type="button" class="btn ghost gcopy" data-copy-tags="${payload}" aria-label="${label}">Copy tags</button></div>`;
+      }
+      return `<li>${link}${tagsHtml}</li>`;
+    }).join("");
+  }
   async function gallery(kw) {
     kw = norm(kw); if (!kw) return;
     const run = ++gRun; gDone = true;
@@ -796,6 +842,8 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
     // Clear the previous keyword's cards so they never sit on screen under the new keyword.
     $("gWin").hidden = true;
     $("gStats").innerHTML = '<p class="note">Loading Etsy data…</p>';
+    $("gTagNote").hidden = true;
+    $("gTagNote").textContent = "";
     $("gTop").innerHTML = "";
     let data, example = false, err = null;
     // Ask for Google Trends alongside the Etsy data rather than after it.
@@ -840,16 +888,29 @@ ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75
       st("Favorites %", (s.favRate * 100).toFixed(1) + "%", "favorites per view") +
       st("KD", s.kd + "/100", kdB.w + " to rank", kdB.c);
     $("gTopTitle").textContent = "Top 10 listings" + (example ? " (example)" : "");
-    const top = L.slice(0, 10);
-    $("gTop").innerHTML = top.map((l, i) => {
-      const t = esc(l.title || "Untitled listing");
-      return `<li>${l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">${t}</a>` : t}</li>`;
-    }).join("");
+    // findAllListingsActive already returns each listing's tags. Only when a
+    // result omits that array do we call getListingsByListingIds once, for
+    // these 10 ids. The connector already allows /listings/batch.
+    let top = L.slice(0, 10);
+    let tagErr = "";
+    if (!example && top.some((l) => !Array.isArray(l.tags))) {
+      try { top = await ensureListingTags(top); }
+      catch (e) { tagErr = e.message || "Couldn't load tags."; }
+      if (run !== gRun) return;
+    }
+    $("gTagNote").hidden = !tagErr;
+    $("gTagNote").textContent = tagErr ? "Couldn't load tags. " + tagErr : "";
+    renderTopList(top);
     const t = example ? exampleTrends(kw) : await trendsP;
     if (run !== gRun) return;
     drawTrend(t); drawCountries(t);
   }
   $("gForm").addEventListener("submit", (e) => { e.preventDefault(); gallery($("gInput").value); });
+  $("gTop").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-copy-tags]");
+    if (!b) return;
+    copy(b.getAttribute("data-copy-tags"), b);
+  });
 
   function renderActivity(L) {
     const now = Date.now() / 1000;
